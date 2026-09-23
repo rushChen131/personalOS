@@ -1,0 +1,32 @@
+{
+  "id": "personalos-v1.2",
+  "name": "personalos-v1.2",
+  "title": "PersonalOS V1.2 完整实现",
+  "description": "",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "chenfch",
+  "assignee": "chenfch",
+  "createdAt": "2026-09-21",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "09-21-backend-core",
+    "09-21-backend-ai",
+    "09-21-backend-jobs",
+    "09-21-frontend",
+    "09-21-infra-docs"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

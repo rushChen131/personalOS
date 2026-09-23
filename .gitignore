@@ -1,0 +1,52 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+
+# --- Local databases / artifacts ---
+*.db
+# Timestamped DB backups (e.g. personalos.db.bak-20260922-151405) are local
+# snapshots of real data — `*.db` alone does not match them.
+*.db.bak*
+*.db-*
+*.sqlite3
+smoke.db
+uvicorn.out.txt
+uvicorn.err.txt
+
+# --- Node / Next.js ---
+node_modules/
+.next/
+out/
+next-env.d.ts
+*.tsbuildinfo
+
+# --- Environment / secrets ---
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# --- Editors / OS ---
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# --- Trellis runtime state (per-developer) ---
+.trellis/.runtime/
+.trellis/.developer
+
+# --- WorkBuddy ---
+# The whole directory is agent-local tooling state, not project content:
+#   - skills/  is a machine-local junction to .agents/skills (the Trellis
+#     cross-platform shared layer). Recreate it on a fresh clone with:
+#       New-Item -ItemType Junction -Path .workbuddy-ai\skills -Target .agents\skills
+#   - memory/  is the AI assistant's own working notes about this project.
+# Keep it out of the published repository; it is per-machine scratch state,
+# the same way .trellis/.runtime/ is.
+.workbuddy-ai/

@@ -1,0 +1,17 @@
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "DTZ", "BLE"]
+ignore = ["B008"]
+
+[tool.ruff.lint.per-file-ignores]
+"app/api/**" = ["DTZ005", "BLE001"]
+"app/main.py" = ["B008"]
+"app/models/**" = ["F821"]
+# Boundary layers translate any provider/plugin failure into a domain error.
+"app/ai/runtime/**" = ["BLE001"]
+"app/ai/gateway/**" = ["BLE001"]
+"app/jobs/**" = ["BLE001", "DTZ011"]
+"app/infrastructure/**" = ["BLE001"]
