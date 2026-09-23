@@ -7,7 +7,6 @@ export const queryKeys = {
   journals: ["journals"] as const,
   goals: ["goals"] as const,
   memories: (type?: string) => ["memories", type ?? "all"] as const,
-  insights: ["insights"] as const,
   conversations: ["conversations"] as const,
 };
 
@@ -19,27 +18,19 @@ export function useGoals() {
   return useQuery({ queryKey: queryKeys.goals, queryFn: () => api.listGoals() });
 }
 
-export function useGoal(id: string) {
-  return useQuery({ queryKey: ["goals", id], queryFn: () => api.getGoal(id), enabled: Boolean(id) });
-}
-
 export function useMemories(type?: string) {
   return useQuery({ queryKey: queryKeys.memories(type), queryFn: () => api.listMemories(type) });
-}
-
-export function useInsights() {
-  return useQuery({ queryKey: queryKeys.insights, queryFn: () => api.listInsights() });
 }
 
 export function useConversations() {
   return useQuery({ queryKey: queryKeys.conversations, queryFn: () => api.listConversations() });
 }
 
-/** Invalidate every list a new journal can affect (journals feed memories/insights). */
+/** Invalidate every list a new journal can affect (journals feed memories). */
 function useInvalidateActivity() {
   const client = useQueryClient();
   return () => {
-    for (const key of [["journals"], ["goals"], ["insights"], ["memories"]]) {
+    for (const key of [["journals"], ["goals"], ["memories"]]) {
       void client.invalidateQueries({ queryKey: key });
     }
   };

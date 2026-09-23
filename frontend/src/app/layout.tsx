@@ -5,7 +5,7 @@ import { AppShell } from "@/components/AppShell";
 
 export const metadata: Metadata = {
   title: "PersonalOS",
-  description: "Personal life operating system — journals, goals, events, memories and AI insight.",
+  description: "Personal life operating system — journals, goals and memories.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

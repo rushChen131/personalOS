@@ -141,19 +141,6 @@ export interface Memory {
   created_at: string;
 }
 
-/** `InsightResponse`. */
-export interface Insight {
-  id: string;
-  title: string;
-  content: string;
-  insight_type: string | null;
-  confidence: number;
-  importance: number;
-  status: string;
-  evidence: unknown[];
-  discovered_at: string;
-}
-
 /** `ConversationResponse`. */
 export interface Conversation {
   id: string;

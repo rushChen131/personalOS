@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { usePathname, useParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { api } from "@/lib/api";
 import { streamChat, type ChatStreamEvent } from "@/lib/sse";
 import { useAuthStore } from "@/stores/auth";
@@ -11,15 +11,8 @@ import type { Conversation } from "@/types/api";
 /** Map a route onto the context object the backend expects (design2.md §53). */
 function useContextTarget(): { type: string; id: string | null; labelKey: string } {
   const pathname = usePathname();
-  const params = useParams<{ id?: string }>();
-  const id = params?.id ?? null;
 
-  if (pathname.startsWith("/goals")) {
-    return { type: "goal", id, labelKey: id ? "copilot.ctx.goal" : "copilot.ctx.goals" };
-  }
-  if (pathname.startsWith("/insights")) return { type: "insight", id, labelKey: "copilot.ctx.insights" };
-  if (pathname.startsWith("/memories")) return { type: "memory", id, labelKey: "copilot.ctx.memory" };
-  if (pathname.startsWith("/journals")) return { type: "journal", id, labelKey: "copilot.ctx.journal" };
+  if (pathname.startsWith("/journals")) return { type: "journal", id: null, labelKey: "copilot.ctx.journal" };
   return { type: "dashboard", id: null, labelKey: "copilot.ctx.dashboard" };
 }
 

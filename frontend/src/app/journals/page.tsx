@@ -1,20 +1,29 @@
 "use client";
 
-import { useState } from "react";
-import { Card, EmptyState, ErrorState } from "@/components/ui";
-import { useCreateJournal, useJournals } from "@/hooks/useApi";
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Card, EmptyState } from "@/components/ui";
+import { useJournals } from "@/hooks/useApi";
 import { formatRelative } from "@/lib/format";
 import { useT } from "@/lib/i18n";
 
-export default function JournalsPage() {
+/**
+ * Reading view for journals. Writing one happens on the overview (a modal there),
+ * so this page only lists and displays entries.
+ */
+function JournalsView() {
   const { t } = useT();
   const journals = useJournals();
-  const createJournal = useCreateJournal();
-  const [title, setTitle] = useState("");
-  const [content, setContent] = useState("");
+  // The overview deep-links at a specific entry (`/journals?id=…`).
+  const requested = useSearchParams().get("id");
   const [selected, setSelected] = useState<string | null>(null);
 
-  const active = journals.data?.find((journal) => journal.id === selected) ?? journals.data?.[0] ?? null;
+  useEffect(() => {
+    if (requested) setSelected(requested);
+  }, [requested]);
+
+  const active =
+    journals.data?.find((journal) => journal.id === selected) ?? journals.data?.[0] ?? null;
 
   return (
     <div className="mx-auto max-w-5xl space-y-5">
@@ -23,53 +32,9 @@ export default function JournalsPage() {
         <p className="mt-0.5 text-sm text-ink-muted">{t("journals.subtitle")}</p>
       </header>
 
-      <Card title={t("journals.newEntry")}>
-        <form
-          className="space-y-3"
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (!title.trim() || !content.trim()) return;
-            createJournal.mutate(
-              { title: title.trim(), content: content.trim() },
-              {
-                onSuccess: () => {
-                  setTitle("");
-                  setContent("");
-                },
-              },
-            );
-          }}
-        >
-          <input
-            value={title}
-            onChange={(event) => setTitle(event.target.value)}
-            placeholder={t("journals.entryTitle")}
-            className="w-full rounded-md border border-surface-border px-3 py-2 text-sm outline-none focus:border-accent"
-          />
-          <textarea
-            value={content}
-            onChange={(event) => setContent(event.target.value)}
-            rows={5}
-            placeholder={t("journals.entryContent")}
-            className="w-full resize-y rounded-md border border-surface-border px-3 py-2 text-sm outline-none focus:border-accent"
-          />
-          <button
-            type="submit"
-            disabled={createJournal.isPending}
-            className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
-          >
-            {createJournal.isPending ? t("common.saving") : t("journals.saveEntry")}
-          </button>
-        </form>
-        {createJournal.isError ? (
-          <div className="mt-3">
-            <ErrorState message={t("journals.errorSave")} />
-          </div>
-        ) : null}
-      </Card>
-
       <div className="grid gap-5 lg:grid-cols-[280px_1fr]">
         <Card title={t("journals.allEntries")}>
+          {journals.isLoading ? <EmptyState message={t("common.loading")} /> : null}
           {journals.data?.length ? (
             <ul className="space-y-1">
               {journals.data.map((journal) => (
@@ -88,7 +53,7 @@ export default function JournalsPage() {
               ))}
             </ul>
           ) : (
-            <EmptyState message={t("journals.empty")} />
+            !journals.isLoading && <EmptyState message={t("journals.empty")} />
           )}
         </Card>
 
@@ -101,5 +66,15 @@ export default function JournalsPage() {
         </Card>
       </div>
     </div>
+  );
+}
+
+export default function JournalsPage() {
+  const { t } = useT();
+  // `useSearchParams` needs a Suspense boundary to stay statically renderable.
+  return (
+    <Suspense fallback={<p className="py-6 text-center text-sm text-ink-muted">{t("common.loading")}</p>}>
+      <JournalsView />
+    </Suspense>
   );
 }

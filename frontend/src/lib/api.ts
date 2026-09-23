@@ -4,7 +4,6 @@ import type {
   ContextResponse,
   Conversation,
   Goal,
-  Insight,
   Journal,
   Memory,
   Message,
@@ -97,9 +96,6 @@ export const api = {
   searchMemories: (query: string, limit = 20) =>
     request<Memory[]>("/memories/search", json({ query, limit })),
   getMemory: (id: string) => request<Memory>(`/memories/${id}`),
-
-  // insights
-  listInsights: () => request<Insight[]>("/insights"),
 
   // chat
   listConversations: () => request<Conversation[]>("/chat/conversations"),

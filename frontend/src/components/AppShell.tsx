@@ -9,14 +9,7 @@ import { LoginPanel } from "@/components/LoginPanel";
 import { CopilotPanel } from "@/components/CopilotPanel";
 import { LOCALES, useHydrateLocale, useLocaleStore, useT } from "@/lib/i18n";
 
-const NAV = [
-  { href: "/dashboard", key: "nav.dashboard" },
-  { href: "/journals", key: "nav.journals" },
-  { href: "/goals", key: "nav.goals" },
-  { href: "/memories", key: "nav.memories" },
-  { href: "/insights", key: "nav.insights" },
-  { href: "/settings", key: "nav.settings" },
-];
+const NAV = [{ href: "/dashboard", key: "nav.dashboard" }];
 
 /** Segmented zh/en switch. Lives in the sidebar and on the login screen. */
 export function LanguageToggle({ className = "" }: { className?: string }) {
@@ -77,10 +70,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen">
       <aside className="flex w-56 shrink-0 flex-col border-r border-surface-border bg-surface px-3 py-5">
-        <div className="px-2 pb-5">
+        {/* Settings has no nav entry any more — the account block is the way in. */}
+        <Link
+          href="/settings"
+          title={t("nav.settings")}
+          aria-label={t("nav.settings")}
+          className={`mb-5 block rounded-md px-2 py-2 transition-colors ${
+            pathname.startsWith("/settings") ? "bg-accent-soft" : "hover:bg-surface-muted"
+          }`}
+        >
           <p className="text-base font-semibold">PersonalOS</p>
           <p className="mt-0.5 text-xs text-ink-muted">{user?.name}</p>
-        </div>
+        </Link>
         <nav className="flex flex-1 flex-col gap-0.5">
           {NAV.map((item) => {
             const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
