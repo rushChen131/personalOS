@@ -21,6 +21,8 @@ uvicorn.err.txt
 # --- Node / Next.js ---
 node_modules/
 .next/
+# Stale build caches parked aside when a dev server cannot clean .next itself.
+.next.stale-*/
 out/
 next-env.d.ts
 *.tsbuildinfo
