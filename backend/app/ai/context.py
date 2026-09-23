@@ -24,8 +24,6 @@ PAGE_CONTEXT: dict[str, tuple[str, ...]] = {
     "journals": ("recent_journals",),
     "memory": ("memories", "recent_journals"),
     "memories": ("memories", "recent_journals"),
-    "insight": ("insights", "recent_journals"),
-    "insights": ("insights",),
 }
 
 _LIMIT = 10
@@ -66,8 +64,6 @@ class ContextRuntime:
             payload["memories"] = await self._memories(session, context.user_id)
         if "recent_journals" in wanted:
             payload["recent_journals"] = await self._recent_journals(session, context.user_id)
-        if "insights" in wanted:
-            payload["insights"] = await self._insights(session, context.user_id)
 
         return payload
 
@@ -171,29 +167,6 @@ class ContextRuntime:
         return [
             {"id": journal.id, "title": journal.title, "content": (journal.content or "")[:500]}
             for journal in rows
-        ]
-
-    async def _insights(self, session: AsyncSession, user_id: str) -> list[dict[str, Any]]:
-        from app.models.insight import Insight
-
-        rows = list(
-            (
-                await session.scalars(
-                    select(Insight)
-                    .where(Insight.user_id == user_id)
-                    .order_by(Insight.discovered_at.desc())
-                    .limit(_LIMIT)
-                )
-            ).unique()
-        )
-        return [
-            {
-                "id": insight.id,
-                "title": insight.title,
-                "content": insight.content,
-                "insight_type": insight.insight_type,
-            }
-            for insight in rows
         ]
 
 

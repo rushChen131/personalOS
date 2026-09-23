@@ -48,8 +48,6 @@ def _select_agent(message: str, context_type: str | None) -> str:
         return "goal_agent"
     if any(word in lowered for word in ("memory", "记忆", "remember")):
         return "memory_agent"
-    if any(word in lowered for word in ("insight", "洞察", "pattern")):
-        return "insight_agent"
     return "personal_manager"
 
 

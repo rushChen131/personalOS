@@ -74,7 +74,6 @@ class ApiSmokeTest(unittest.TestCase):
         self.assertEqual(self.client.get("/api/v1/memories", headers=headers).status_code, 200)
         search = self.client.post("/api/v1/memories/search", headers=headers, json={"query": "searchable"})
         self.assertEqual(search.status_code, 200)
-        self.assertEqual(self.client.get("/api/v1/insights", headers=headers).status_code, 200)
 
         conversation = self.client.post(
             "/api/v1/chat/conversations", headers=headers, params={"title": "Smoke conversation"}
@@ -108,19 +107,21 @@ class ApiSmokeTest(unittest.TestCase):
             self.assertGreaterEqual(database.execute("SELECT COUNT(*) FROM tool_runs").fetchone()[0], 2)
         finally:
             database.close()
+        # §67: confirming a proposal must actually execute the frozen call.
+        # The flow is exercised with a surviving read tool, because the Insight
+        # module (which owned the only write tool) has been retired.
         proposal = action_proposals.create(
             login.json()["data"]["user"]["id"],
-            "create_insight",
-            {"title": "Smoke insight", "content": "confirmed via proposal"},
-            agent_name="insight_agent",
-            reason="high-risk tool",
+            "query_journals",
+            {"limit": 3},
+            agent_name="journal_agent",
+            reason="proposal confirmation smoke test",
         )
         confirmation = self.client.post(f"/api/v1/actions/{proposal['id']}/confirm", headers=headers)
         self.assertEqual(confirmation.status_code, 200)
         confirmed = confirmation.json()["data"]
-        # §67: confirming a proposal must actually execute the frozen call.
         self.assertEqual(confirmed["status"], "EXECUTED")
-        self.assertEqual(confirmed["tool"], "create_insight")
+        self.assertEqual(confirmed["tool"], "query_journals")
         self.assertNotIn("error", confirmed)
         self.assertEqual(self.client.delete(f"/api/v1/journals/{journal_id}", headers=headers).status_code, 200)
         self.assertEqual(self.client.delete(f"/api/v1/goals/{goal_id}", headers=headers).status_code, 200)

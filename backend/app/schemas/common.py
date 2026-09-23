@@ -150,20 +150,6 @@ class MemoryResponse(BaseModel):
     created_at: datetime
 
 
-class InsightResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: str
-    title: str
-    content: str
-    insight_type: str | None
-    confidence: float
-    importance: float
-    status: str
-    evidence: list[Any] = Field(default_factory=list)
-    discovered_at: datetime
-
-
 class ChatContext(BaseModel):
     type: str = "dashboard"
     id: str | None = None

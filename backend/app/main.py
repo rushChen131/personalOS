@@ -13,7 +13,6 @@ from app.api.v1 import (
     context,
     goal,
     health,
-    insight,
     journal,
     memory,
 )
@@ -101,6 +100,5 @@ app.include_router(auth.router, prefix=v1_prefix)
 app.include_router(journal.router, prefix=v1_prefix)
 app.include_router(goal.router, prefix=v1_prefix)
 app.include_router(memory.router, prefix=v1_prefix)
-app.include_router(insight.router, prefix=v1_prefix)
 app.include_router(chat.router, prefix=v1_prefix)
 app.include_router(context.router, prefix=v1_prefix)

@@ -9,7 +9,6 @@ from __future__ import annotations
 from app.jobs.handlers import (
     EmbeddingJob,
     GoalProgressJob,
-    InsightAnalysisJob,
     MemoryAnalysisJob,
     MemoryCompactionJob,
 )
@@ -20,7 +19,6 @@ __all__ = [
     "EmbeddingJob",
     "GoalProgressJob",
     "InProcessDispatcher",
-    "InsightAnalysisJob",
     "MemoryAnalysisJob",
     "MemoryCompactionJob",
     "dispatcher",

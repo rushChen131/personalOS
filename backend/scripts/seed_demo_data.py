@@ -1,11 +1,11 @@
 """Populate a running PersonalOS instance with a realistic demo dataset.
 
 Everything is written through the HTTP API, so the real Journal -> Candidate ->
-Memory pipeline, the goal-progress job and the insight engine all run exactly as
+Memory pipeline and the goal-progress job run exactly as
 they would for a live user. Nothing is inserted directly into the database.
 
 Journals are the single authored input, so this script only writes journals (and
-goals/metrics). Memories, insights and goal progress are derived by the jobs
+goals/metrics). Memories and goal progress are derived by the jobs
 that fire on journal creation.
 
     cd backend && .venv/Scripts/python.exe scripts/seed_demo_data.py
@@ -83,7 +83,7 @@ def reset_demo_data(client: ApiClient) -> None:
     removable = ("/journals", "/goals")
     skipped: list[str] = []
     removed = 0
-    for path in ("/journals", "/goals", "/memories", "/insights"):
+    for path in ("/journals", "/goals", "/memories"):
         items = client.data(client.get(path))
         if path not in removable:
             if items:
@@ -343,7 +343,6 @@ def main() -> int:
         ("/goals", "goals"),
         ("/journals", "journals"),
         ("/memories", "memories"),
-        ("/insights", "insights"),
     ):
         items = client.data(client.get(path))
         print(f"  {label:<10} {len(items)}")

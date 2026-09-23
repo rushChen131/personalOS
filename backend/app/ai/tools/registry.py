@@ -9,15 +9,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.ai.rag.runtime import RAGRuntime
 from app.ai.runtime.base import (
     READ,
-    WRITE_INSIGHT,
     AgentContext,
 )
 from app.ai.tools.proposals import action_proposals
 from app.core.errors import ErrorCode
-from app.infrastructure.bus.event_bus import event_bus
-from app.models.base import InsightType
-from app.repositories.insight_report_repository import InsightRepository
-from app.services.insight_service import InsightService
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,12 +50,6 @@ class ToolRegistry:
                 "Hybrid search across memories",
                 READ,
                 {"type": "object", "properties": {"query": {"type": "string"}}},
-            ),
-            "query_insights": ToolDefinition(
-                "query_insights", "List generated insights", READ, {"type": "object", "properties": {}}
-            ),
-            "create_insight": ToolDefinition(
-                "create_insight", "Persist an insight", WRITE_INSIGHT, {"type": "object"}, task_type="insight"
             ),
             "calendar_tool": ToolDefinition(
                 "calendar_tool",
@@ -198,35 +187,10 @@ class ToolRegistry:
         )
         return {"memories": [h for h in hits if h["kind"] == "memory"]}
 
-    async def _run_query_insights(
-        self, session: AsyncSession, context: AgentContext, args: dict[str, Any]
-    ) -> dict[str, Any]:
-        rows = await InsightRepository().list(session, context.user_id, limit=10)
-        return {
-            "insights": [
-                {"id": i.id, "title": i.title, "insight_type": i.insight_type, "content": i.content} for i in rows
-            ]
-        }
-
     async def _run_calendar_tool(
         self, session: AsyncSession, context: AgentContext, args: dict[str, Any]
     ) -> dict[str, Any]:
         return {"status": "not_configured", "message": "Calendar sync is not configured in local mode."}
-
-    # -- write tools -----------------------------------------------------
-
-    async def _run_create_insight(
-        self, session: AsyncSession, context: AgentContext, args: dict[str, Any]
-    ) -> dict[str, Any]:
-        insight = await InsightService(InsightRepository(), event_bus).create(
-            session,
-            context.user_id,
-            title=args.get("title", "Insight"),
-            content=args.get("content", ""),
-            insight_type=args.get("insight_type", InsightType.PATTERN.value),
-            confidence=args.get("confidence", 0.5),
-        )
-        return {"insight": {"id": insight.id, "title": insight.title}}
 
 
 __all__ = [

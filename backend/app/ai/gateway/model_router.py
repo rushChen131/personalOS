@@ -7,7 +7,7 @@ class ModelRouter:
     """Pick a model per task type; mock mode ignores the id but keeps it stable."""
 
     _CHEAP_TASKS = {"chat", "extract", "memory_refine"}
-    _HEAVY_TASKS = {"insight", "coach"}
+    _HEAVY_TASKS = {"coach"}
 
     def select(self, task_type: str) -> str:
         if settings.llm_provider == "mock":

@@ -94,34 +94,6 @@ class TimezoneIntegrityTest(unittest.TestCase):
         drift = abs((datetime.now(timezone.utc) - parsed.astimezone(timezone.utc)).total_seconds())
         self.assertLess(drift, 300, "created_at should be within minutes of now")
 
-    def test_insight_engine_window_comparison_does_not_mix_naive_and_aware(self) -> None:
-        """Regression: comparing an aware timestamp to a naive boundary used to raise."""
-        import asyncio
-
-        from app.core.database import SessionLocal
-        from app.repositories.insight_report_repository import InsightRepository
-        from app.services.insight_engine import InsightEngine
-
-        # A journal entry today guarantees the recent-window branch is exercised.
-        self.client.post(
-            "/api/v1/journals",
-            headers=self.headers,
-            json={
-                "content": "TZ insight window probe — 我今天记录了这条日志。",
-                "occurred_at": datetime.now(timezone.utc).isoformat(),
-            },
-        )
-
-        async def run() -> int:
-            async with SessionLocal() as session:
-                insights = await InsightEngine(InsightRepository()).generate(
-                    session, self.user_id, period_days=14
-                )
-                return len(insights)
-
-        # Must not raise TypeError: can't compare offset-naive and offset-aware datetimes
-        self.assertGreaterEqual(asyncio.run(run()), 0)
-
     def test_memory_engine_window_is_timezone_aware(self) -> None:
         """The memory evidence window must find journals written in UTC."""
 

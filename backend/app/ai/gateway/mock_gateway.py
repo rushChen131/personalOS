@@ -90,11 +90,6 @@ class MockGateway:
                 return "没有找到目标。" if zh else "No goals found."
             items = "，".join(f"{g.get('title')}（{float(g.get('progress', 0)):.0f}%）" for g in goals)
             return ("目标：" + items + "。") if zh else ("Goals: " + items + ".")
-        if "insights" in result:
-            insights = result["insights"]
-            if not insights:
-                return "没有找到洞察。" if zh else "No insights found."
-            return f"找到 {len(insights)} 条洞察。" if zh else f"Found {len(insights)} insight(s)."
         if "proposal" in result:
             return "该操作需要你确认后才会执行。" if zh else "This action needs your confirmation before I run it."
         return None
@@ -148,7 +143,6 @@ class MockGateway:
             (("memory" in normalized or "记忆" in message), "search_memory",
              {"query": re.sub(r"[？?。.]", "", message)[-24:]}),
             (("goal" in normalized or "目标" in message), "query_goals", {}),
-            (("insight" in normalized or "洞察" in message), "query_insights", {}),
         )
         for matches, name, args in specific:
             if not matches:
@@ -209,28 +203,20 @@ class MockGateway:
         normalized = message.lower()
         zh = MockGateway.detect_language(message) == "zh"
         if any(word in normalized for word in ("hello", "hi ", "hey")) or message.startswith("你好"):
-            return "你好！我可以帮你回顾日志、目标、记忆和洞察。" if zh else (
-                "Hi! I can help you review journals, goals, memories, and insights."
+            return "你好！我可以帮你回顾日志、目标和记忆。" if zh else (
+                "Hi! I can help you review journals, goals, and memories."
             )
         if any(word in normalized for word in ("help", "what can you")) or "能做什么" in message:
             if zh:
-                return "我可以回顾你的日志、查看目标、搜索记忆与洞察。"
-            return "I can review your journals, goals, memories, and insights."
+                return "我可以回顾你的日志、查看目标、搜索记忆。"
+            return "I can review your journals, goals, and memories."
         if zh:
-            return "我可以帮你整理日志、目标、记忆和洞察。你可以试试问「我最近写了什么」或「今天完成了什么」。"
-        return "I can help organize your journals, goals, memories, and insights."
+            return "我可以帮你整理日志、目标和记忆。你可以试试问「我最近写了什么」或「今天完成了什么」。"
+        return "I can help organize your journals, goals, and memories."
 
     # -- structured output helpers (used by agents) ----------------------
 
     async def structured(self, messages: list[dict[str, str]], schema_hint: dict[str, Any]) -> dict[str, Any]:
         """Return a deterministic JSON object for agents that expect structure."""
         message = self._last_user_message(messages)
-        kind = schema_hint.get("kind", "generic")
-        if kind == "insight":
-            return {
-                "title": schema_hint.get("title", "Insight"),
-                "content": schema_hint.get("content", ""),
-                "insight_type": schema_hint.get("insight_type", "OBSERVATION"),
-                "confidence": schema_hint.get("confidence", 0.5),
-            }
         return {"message": message}

@@ -4,7 +4,6 @@ from typing import TYPE_CHECKING, Any
 
 from app.ai.runtime.base import (
     READ,
-    WRITE_INSIGHT,
     WRITE_MEMORY,
     AgentContext,
     AgentInput,
@@ -16,7 +15,6 @@ if TYPE_CHECKING:
 
 __all__ = [
     "READ",
-    "WRITE_INSIGHT",
     "WRITE_MEMORY",
     "AgentContext",
     "AgentInput",

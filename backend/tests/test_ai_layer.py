@@ -39,9 +39,9 @@ class AiLayerTest(unittest.TestCase):
         self.assertEqual(tool, "query_journals")
         self.assertEqual(args, {})
 
-    def test_agent_registry_has_six_agents_and_permissions(self) -> None:
+    def test_agent_registry_has_five_agents_and_permissions(self) -> None:
         agents = agent_registry.all()
-        self.assertEqual(len(agents), 6)
+        self.assertEqual(len(agents), 5)
         self.assertEqual(agents["journal_agent"].permissions, {"READ"})
         self.assertEqual(agents["memory_agent"].permissions, {"READ", "WRITE_MEMORY"})
         self.assertEqual(agents["coach_agent"].permissions, {"READ"})
@@ -53,9 +53,10 @@ class AiLayerTest(unittest.TestCase):
         from app.ai.runtime import AgentContext
 
         context = AgentContext(user_id="missing-user")
-        # create_insight is a WRITE tool; a READ-only caller must be refused.
+        # A caller holding no permissions must be refused any tool. (The Insight
+        # module owned the only write tool, so the write-vs-read split is gone.)
         result = asyncio.run(
-            registry.execute("create_insight", {"title": "x"}, context, None, {"READ"})  # type: ignore[arg-type]
+            registry.execute("query_journals", {}, context, None, set())  # type: ignore[arg-type]
         )
         self.assertEqual(result["error"], "TOOL_PERMISSION_DENIED")
 
@@ -419,7 +420,6 @@ class MockGatewayLanguageTest(unittest.TestCase):
         "query_journals",
         "query_goals",
         "search_memory",
-        "query_insights",
     }
 
     def setUp(self) -> None:
@@ -435,7 +435,6 @@ class MockGatewayLanguageTest(unittest.TestCase):
         """A recency word plus an entity means the user wants that entity."""
         expected = {
             "最近有什么目标": "query_goals",
-            "最近的洞察": "query_insights",
             "搜一下记忆里的Rust": "search_memory",
         }
         for message, tool in expected.items():
@@ -519,11 +518,6 @@ class MockGatewayLanguageTest(unittest.TestCase):
         self.assertIn("整理", zh)
         self.assertIn("organize", en)
 
-    def test_insight_agent_can_read_insights(self) -> None:
-        """`_select_agent` routes "洞察" here, so it must be able to list them."""
-        agent = agent_registry.get("insight_agent")
-        self.assertIn("query_insights", agent.tools, "insight_agent cannot list insights without this tool")
-
     def test_read_agents_are_localised(self) -> None:
         """Every read-path agent must answer in the user's language."""
         from app.ai.runtime.base import AgentInput
@@ -531,7 +525,6 @@ class MockGatewayLanguageTest(unittest.TestCase):
         cases = {
             "goal_agent": ({"goals": [{"title": "跑马拉松", "progress": 40}]}, "目标"),
             "memory_agent": ({"memories": [{"content": "喜欢深度工作"}]}, "相关记忆"),
-            "insight_agent": ({"insights": [{"title": "专注力下降"}]}, "洞察"),
         }
         for name, (tool_result, marker) in cases.items():
             with self.subTest(agent=name):
@@ -540,13 +533,6 @@ class MockGatewayLanguageTest(unittest.TestCase):
                     AgentInput(message="给我看看"), [{"name": "t", "result": tool_result}]
                 )
                 self.assertIn(marker, content, f"{name} should answer in Chinese")
-
-    def test_insight_agent_reports_empty_in_chinese(self) -> None:
-        from app.ai.runtime.base import AgentInput
-
-        agent = agent_registry.get("insight_agent")
-        content = agent.compose(AgentInput(message="最近的洞察"), [{"name": "t", "result": {"insights": []}}])
-        self.assertIn("没有找到", content)
 
 
 if __name__ == "__main__":

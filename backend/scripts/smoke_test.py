@@ -1,8 +1,8 @@
 """End-to-end endpoint smoke test (plan item A2 / A4).
 
 Runs the full API surface in-process against a throwaway SQLite database using
-FastAPI's TestClient. Exercises auth, the journal/goal/memory/insight CRUD
-resources, the removal of the event/report/timeline modules, and the chat
+FastAPI's TestClient. Exercises auth, the journal/goal/memory CRUD
+resources, the removal of the event/report/insight modules, and the chat
 conversation lifecycle + SSE stream.
 
     cd backend && .venv/Scripts/python.exe scripts/smoke_test.py
@@ -157,8 +157,9 @@ def main() -> int:
         )
         check("POST /memories 405/404 (manual entry removed)", manual.status_code in (404, 405), manual.text)
 
-        print("\n[insights]")
-        check("GET /insights", client.get("/api/v1/insights", headers=auth).status_code == 200)
+        print("\n[removed modules]")
+        insights = client.get("/api/v1/insights", headers=auth)
+        check("GET /insights 404 (module removed)", insights.status_code == 404, insights.text)
         reports = client.get("/api/v1/reports", headers=auth)
         check("GET /reports 404 (module removed)", reports.status_code == 404, reports.text)
         generate = client.post(

@@ -10,7 +10,6 @@ from app.core.logging import logger
 from app.models.base import CandidateStatus
 from app.models.memory import Memory, MemoryCandidate, MemorySource
 from app.models.project import Goal
-from app.repositories.insight_report_repository import InsightRepository
 
 
 class GoalProgressJob:
@@ -78,18 +77,6 @@ class MemoryAnalysisJob:
             return {"skipped": "journal not found"}
 
         return await MemoryEngine().ingest_journal(session, user_id, journal)
-
-
-class InsightAnalysisJob:
-    """Run the rule-based insight engine for the triggering user."""
-
-    async def run(self, session: AsyncSession, user_id: str, payload: dict[str, Any]) -> dict[str, Any]:
-        from app.infrastructure.bus.event_bus import event_bus
-        from app.services.insight_engine import InsightEngine
-
-        engine = InsightEngine(InsightRepository(), event_bus)
-        insights = await engine.generate(session, user_id, period_days=int(payload.get("period_days", 14)))
-        return {"insights_created": len(insights), "ids": [i.id for i in insights]}
 
 
 class EmbeddingJob:

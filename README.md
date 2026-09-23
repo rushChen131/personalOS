@@ -3,8 +3,8 @@
 **English** | [简体中文](README.zh-CN.md)
 
 A personal life operating system: journals as the single authored input, with
-goals, long-term memories and an AI layer that distils facts from your daily
-writing and surfaces insights from it.
+goals, long-term memories and an AI layer that distils durable facts from your
+daily writing.
 
 Two run paths are supported:
 
@@ -145,15 +145,14 @@ Base path `/api/v1`. Every JSON response uses the envelope
 | Goals | `GET/POST /goals`, `GET/PUT/DELETE /goals/{id}`, `POST /goals/{id}/metrics` |
 | Projects | `GET/POST /projects`, `GET/PUT /projects/{id}` |
 | Memories | `GET /memories`, `GET /memories/{id}`, `POST /memories/search` |
-| Insights | `GET /insights` |
 | Chat | `POST /chat` **(SSE)**, `GET/POST /chat/conversations`, `GET /chat/conversations/{id}` |
 | Actions | `POST /actions/{id}/confirm` |
 | Context | `GET /context` |
 
 > **Journals are the only authored input.** The `Journal → Candidate → Memory`
 > pipeline distils long-term facts straight out of journal body text, and the
-> goal-progress / insight analysis jobs read journals too. The `Event` and
-> `Report` modules have been retired from the API and UI: their models and tables
+> goal-progress job reads journals too. The `Event`, `Report` and `Insight`
+> modules have been retired from the API and UI: their models and tables
 > are retained for backward compatibility, but there is no longer any code path
 > that reads or writes them. `POST /memories` was removed with them — memories
 > cannot be entered by hand.
@@ -179,13 +178,12 @@ event: done         data: {"conversation_id": "...", "success": true}
 
 ## AI layer
 
-- **6 agents** (`app/ai/agents/base.py`): `personal_manager`, `journal_agent`,
-  `goal_agent`, `memory_agent`, `insight_agent`, `coach_agent`.
+- **5 agents** (`app/ai/agents/base.py`): `personal_manager`, `journal_agent`,
+  `goal_agent`, `memory_agent`, `coach_agent`.
   Each declares `tools` and `permissions`; the registry filters tool schemas by
   permission and returns `TOOL_PERMISSION_DENIED` on violation.
 - **Tools** (`app/ai/tools/registry.py`): `query_journals`, `query_goals`,
-  `search_memory`, `query_insights`, `create_insight`,
-  `calendar_tool` (placeholder).
+  `search_memory`, `calendar_tool` (placeholder).
 - **RAG** (`app/ai/rag/runtime.py`): hybrid keyword + importance + recency
   scoring over memories and journals in SQLite/PG. pgvector cosine search is wired
   behind an explicit filter flag so it never affects SQLite results.
@@ -197,12 +195,12 @@ event: done         data: {"conversation_id": "...", "success": true}
 ## Background jobs
 
 - `app/jobs/handlers.py` — `GoalProgressJob`, `MemoryAnalysisJob`,
-  `InsightAnalysisJob`, `EmbeddingJob`, `MemoryCompactionJob`.
+  `EmbeddingJob`, `MemoryCompactionJob`.
 - `app/jobs/in_process.py` — local dispatcher. Wires `JournalCreated → embedding
-  + memory distillation + insight analysis + goal progress`. Jobs queued during a
+  + memory distillation + goal progress`. Jobs queued during a
   request run **after** its transaction commits.
-- `app/jobs/worker.py` — arq worker definition with cron schedules (weekly
-  insights Mon 04:00, memory compaction Sun 05:00).
+- `app/jobs/worker.py` — arq worker definition with cron schedules (memory
+  compaction Sun 05:00).
 - `app/jobs/worker_main.py` — container entry point (`python -m app.jobs.worker`).
 
 ## Engines
@@ -211,13 +209,11 @@ event: done         data: {"conversation_id": "...", "success": true}
   pulls first-person statements out of journal body text, buckets them by leading
   entity, and promotes a bucket to a `Memory` only once it clears the §83
   evidence/confidence thresholds.
-- **InsightEngine** (`app/services/insight_engine.py`) rule-based detection over
-  journals: recurring focus → `TREND`, mood trend → `RISK`/`ACHIEVEMENT`, writing
-  frequency → `BEHAVIOR_CHANGE`, goal stagnation → `RISK`, goal momentum →
-  `GOAL_PROGRESS`, accomplishment wording → `ACHIEVEMENT`, and next-step nudges →
-  `SUGGESTION`. Titles are stable per rule, so a repeated run refreshes the
-  existing row instead of stacking a near-duplicate. Note `generate()` returns
-  only the insights *created* by that run — query `GET /insights` for the full feed.
+
+> The rule-based **InsightEngine** and its `GET /insights` feed were retired:
+> memory distillation already answers "what keeps coming up", so the two
+> surfaces duplicated each other. The `Insight` model and `insights` table are
+> retained for backward compatibility.
 
 ---
 

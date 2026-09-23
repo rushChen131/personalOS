@@ -5,7 +5,6 @@ from typing import Any
 
 READ = "READ"
 WRITE_MEMORY = "WRITE_MEMORY"
-WRITE_INSIGHT = "WRITE_INSIGHT"
 
 
 @dataclass(slots=True)

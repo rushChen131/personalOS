@@ -3,35 +3,6 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.insight import Insight
-
-
-class InsightRepository:
-    async def create(self, session: AsyncSession, insight: Insight) -> Insight:
-        session.add(insight)
-        await session.flush()
-        return insight
-
-    async def get(self, session: AsyncSession, user_id: str, insight_id: str) -> Insight | None:
-        stmt = select(Insight).where(Insight.id == insight_id, Insight.user_id == user_id)
-        return await session.scalar(stmt)
-
-    async def list(
-        self,
-        session: AsyncSession,
-        user_id: str,
-        limit: int = 50,
-        offset: int = 0,
-    ) -> list[Insight]:
-        stmt = (
-            select(Insight)
-            .where(Insight.user_id == user_id)
-            .order_by(Insight.discovered_at.desc())
-            .limit(limit)
-            .offset(offset)
-        )
-        return list((await session.scalars(stmt)).unique())
-
 
 class ConversationRepository:
     async def create(self, session: AsyncSession, conversation) -> object:

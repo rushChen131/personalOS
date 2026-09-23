@@ -20,10 +20,6 @@ async def run_job(ctx: dict[str, Any], job_type: str, user_id: str, payload: dic
         return result
 
 
-async def weekly_insights(ctx: dict[str, Any], user_id: str) -> dict:
-    return await run_job(ctx, "insight_analysis", user_id, {"period_days": 7})
-
-
 async def memory_compaction(ctx: dict[str, Any], user_id: str) -> dict:
     return await run_job(ctx, "memory_compaction", user_id, {})
 
@@ -42,12 +38,11 @@ class WorkerSettings:
     Run with: ``arq app.jobs.worker.WorkerSettings``
 
     Scheduled jobs (design2.md §57):
-      - weekly_insights   Monday 04:00
       - memory_compaction Sunday 05:00
 
     The report crons were removed along with the Report module; the only
     user-authored input is the journal, whose per-entry fan-out (embedding,
-    memory distillation, insight analysis, goal progress) is driven by the
+    memory distillation, goal progress) is driven by the
     ``JournalCreated`` event rather than a wall-clock schedule.
 
     Not scheduled automatically in local mode; use the in-process dispatcher
@@ -56,7 +51,6 @@ class WorkerSettings:
 
     functions = [
         run_job,
-        weekly_insights,
         memory_compaction,
     ]
     on_startup = startup
@@ -85,16 +79,11 @@ class WorkerSettings:
             for user_id in user_ids:
                 await run_job(ctx, job_name, user_id, payload or {})
 
-        async def cron_weekly_insights(ctx: dict[str, Any]) -> None:
-            await with_user(ctx, "insight_analysis", {"period_days": 7})
-
         async def cron_memory_compaction(ctx: dict[str, Any]) -> None:
             await with_user(ctx, "memory_compaction")
 
         cls.redis_settings = RedisSettings.from_dsn(settings.redis_url)
         cls.cron_jobs = [
-            # Weekly insight sweep: Monday 04:00.
-            cron(cron_weekly_insights, weekday="mon", hour=4, minute=0),
             # Housekeeping: Sunday 05:00.
             cron(cron_memory_compaction, weekday="sun", hour=5, minute=0),
         ]

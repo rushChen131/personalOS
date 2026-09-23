@@ -2,7 +2,7 @@
 
 [English](README.md) | **简体中文**
 
-个人生活操作系统：**日志是唯一的人工输入口**，围绕它生长出目标、长期记忆，以及一个能从你的日常书写中蒸馏事实、并从中提炼洞察的 AI 层。
+个人生活操作系统：**日志是唯一的人工输入口**，围绕它生长出目标、长期记忆，以及一个能从你的日常书写中蒸馏出长期事实的 AI 层。
 
 支持两条运行路径：
 
@@ -138,12 +138,11 @@ OPENAI_API_KEY=sk-...
 | 目标 | `GET/POST /goals`、`GET/PUT/DELETE /goals/{id}`、`POST /goals/{id}/metrics` |
 | 项目 | `GET/POST /projects`、`GET/PUT /projects/{id}` |
 | 记忆 | `GET /memories`、`GET /memories/{id}`、`POST /memories/search` |
-| 洞察 | `GET /insights` |
 | 对话 | `POST /chat` **（SSE）**、`GET/POST /chat/conversations`、`GET /chat/conversations/{id}` |
 | 动作 | `POST /actions/{id}/confirm` |
 | 上下文 | `GET /context` |
 
-> **日志是唯一的人工输入。** `Journal → Candidate → Memory` 流水线直接从日志正文中蒸馏长期事实，目标进度与洞察分析任务同样读日志。`Event` 与 `Report` 两个模块已从 API 和 UI 退役：模型与数据表为向后兼容而保留，但**已不存在任何读写它们的代码路径**。`POST /memories` 随之一并删除 —— 记忆不能手工录入。
+> **日志是唯一的人工输入。** `Journal → Candidate → Memory` 流水线直接从日志正文中蒸馏长期事实，目标进度任务同样读日志。`Event`、`Report`、`Insight` 三个模块已从 API 和 UI 退役：模型与数据表为向后兼容而保留，但**已不存在任何读写它们的代码路径**。`POST /memories` 随之一并删除 —— 记忆不能手工录入。
 
 ### 对话流式协议
 
@@ -164,12 +163,12 @@ event: done         data: {"conversation_id": "...", "success": true}
 
 ## AI 层
 
-- **6 个 Agent**（`app/ai/agents/base.py`）：`personal_manager`、`journal_agent`、
-  `goal_agent`、`memory_agent`、`insight_agent`、`coach_agent`。
+- **5 个 Agent**（`app/ai/agents/base.py`）：`personal_manager`、`journal_agent`、
+  `goal_agent`、`memory_agent`、`coach_agent`。
   每个 Agent 都声明自己的 `tools` 与 `permissions`；注册表按权限过滤工具 schema，越权时返回
   `TOOL_PERMISSION_DENIED`。
 - **工具**（`app/ai/tools/registry.py`）：`query_journals`、`query_goals`、
-  `search_memory`、`query_insights`、`create_insight`、`calendar_tool`（占位）。
+  `search_memory`、`calendar_tool`（占位）。
 - **RAG**（`app/ai/rag/runtime.py`）：在 SQLite/PG 上对记忆与日志做「关键词 + 重要性 + 时效性」混合打分。pgvector 的余弦检索挂在显式开关后面，因此永远不会影响 SQLite 下的结果。
 - **动作提案**：高风险工具返回带 `requires_confirmation` 的提案，通过 `POST /actions/{id}/confirm` 确认。
 - **链路追踪**：每次运行都会写入 `agent_runs` + `tool_runs`（agent、model、输入、输出、状态、耗时、token）。
@@ -177,9 +176,9 @@ event: done         data: {"conversation_id": "...", "success": true}
 ## 后台任务
 
 - `app/jobs/handlers.py` —— `GoalProgressJob`、`MemoryAnalysisJob`、
-  `InsightAnalysisJob`、`EmbeddingJob`、`MemoryCompactionJob`。
-- `app/jobs/in_process.py` —— 本地调度器。把 `JournalCreated` 扇出为「向量化 + 记忆蒸馏 + 洞察分析 + 目标进度」。请求期间入队的任务会在其事务**提交之后**才执行。
-- `app/jobs/worker.py` —— arq worker 定义与 cron 排程（每周洞察：周一 04:00；记忆压缩：周日 05:00）。
+  `EmbeddingJob`、`MemoryCompactionJob`。
+- `app/jobs/in_process.py` —— 本地调度器。把 `JournalCreated` 扇出为「向量化 + 记忆蒸馏 + 目标进度」。请求期间入队的任务会在其事务**提交之后**才执行。
+- `app/jobs/worker.py` —— arq worker 定义与 cron 排程（记忆压缩：周日 05:00）。
 - `app/jobs/worker_main.py` —— 容器入口（`python -m app.jobs.worker`）。
 
 ## 引擎
@@ -187,11 +186,9 @@ event: done         data: {"conversation_id": "...", "success": true}
 - **MemoryEngine**（`app/services/memory_engine.py`）+ `journal_extractor.py`：
   从日志正文中抽出第一人称陈述，按主体聚桶；只有当某个桶越过 §83 的
   证据数 / 置信度阈值后，才会晋级为一条 `Memory`。
-- **InsightEngine**（`app/services/insight_engine.py`）基于规则对日志做检测：
-  话题复现 → `TREND`，情绪走向 → `RISK`/`ACHIEVEMENT`，书写频率 → `BEHAVIOR_CHANGE`，
-  目标停滞 → `RISK`，目标动能 → `GOAL_PROGRESS`，成果措辞 → `ACHIEVEMENT`，
-  下一步建议 → `SUGGESTION`。每条规则的标题都是**稳定**的，因此重复运行只会原地刷新已有记录，
-  不会堆叠近似重复行。注意 `generate()` 只返回本次**新建**的洞察 —— 要看完整列表请查 `GET /insights`。
+
+> 基于规则的 **InsightEngine** 及其 `GET /insights` 列表已退役：记忆蒸馏本身就在回答
+> 「什么在反复出现」，两者功能重叠。`Insight` 模型与 `insights` 数据表为向后兼容而保留。
 
 ---
 
