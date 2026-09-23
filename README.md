@@ -1,5 +1,7 @@
 # PersonalOS
 
+**English** | [简体中文](README.zh-CN.md)
+
 A personal life operating system: journals as the single authored input, with
 goals, long-term memories and an AI layer that distils facts from your daily
 writing and surfaces insights from it.
@@ -69,7 +71,7 @@ personalOS/
 ├── backend/                    FastAPI service
 │   ├── app/
 │   │   ├── ai/                 Agent runtime, gateways, tools, RAG
-│   │   │   ├── agents/         BaseAgent + 7 agents + AgentRegistry
+│   │   │   ├── agents/         BaseAgent + 6 agents + AgentRegistry
 │   │   │   ├── gateway/        LLMGateway, MockGateway, OpenAIGateway, ModelRouter
 │   │   │   ├── rag/            RAGRuntime (hybrid retrieval)
 │   │   │   ├── runtime/        AgentRuntime, AgentContext/Input/Result
