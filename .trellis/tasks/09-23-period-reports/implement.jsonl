@@ -1,0 +1,14 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "backend spec index"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "layer layout"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "ORM + migration rules"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "error code + envelope"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "quality bar"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "frontend spec index"}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "route + component layout"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "page/component patterns"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "TanStack Query hooks"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "API types"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "client state"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "frontend quality bar"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "API/UI contract"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "reuse over rewrite"}

@@ -10,25 +10,25 @@ from app.core.logging import logger
 from app.infrastructure.bus.event_bus import EventBus, event_bus
 from app.jobs.handlers import (
     EmbeddingJob,
-    GoalProgressJob,
     MemoryAnalysisJob,
     MemoryCompactionJob,
+    ReportGenerationJob,
 )
 
 JobCallable = Callable[[AsyncSession, str, dict[str, Any]], Awaitable[dict[str, Any]]]
 
 REGISTRY: dict[str, JobCallable] = {
-    "goal_progress": GoalProgressJob().run,
     "memory_analysis": MemoryAnalysisJob().run,
     "embedding": EmbeddingJob().run,
     "memory_compaction": MemoryCompactionJob().run,
+    "report_generation": ReportGenerationJob().run,
 }
 
 
 class InProcessDispatcher:
     """Local-mode replacement for an arq worker.
 
-    Wires the JournalCreated fan-out (EmbeddingJob / GoalProgressJob /
+    Wires the JournalCreated fan-out (EmbeddingJob /
     MemoryAnalysisJob), so one journal entry drives embedding and memory
     distillation. Exposes ``run_job``
     so scheduled jobs can be triggered manually without Redis.
@@ -84,12 +84,10 @@ class InProcessDispatcher:
         if not user_id:
             return
         # A journal entry is the single user-facing input, so it fans out to
-        # the whole downstream pipeline: embedding, memory distillation,
-        # and goal-progress refresh.
+        # the whole downstream pipeline: embedding and memory distillation.
         jobs = (
             ("embedding", {"journal_id": journal_id}),
             ("memory_analysis", {"journal_id": journal_id}),
-            ("goal_progress", {"journal_id": journal_id}),
         )
         if self._inline:
             for job_type, job_payload in jobs:

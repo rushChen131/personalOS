@@ -39,11 +39,12 @@ class WorkerSettings:
 
     Scheduled jobs (design2.md §57):
       - memory_compaction Sunday 05:00
+      - report_generation: daily 00:05, weekly Mon 00:10, monthly 1st 00:15
 
-    The report crons were removed along with the Report module; the only
-    user-authored input is the journal, whose per-entry fan-out (embedding,
-    memory distillation, goal progress) is driven by the
-    ``JournalCreated`` event rather than a wall-clock schedule.
+    Report crons always target the period that has just **ended**, so a report
+    never summarises a day still in progress. The per-entry fan-out (embedding,
+    memory distillation) is driven by the ``JournalCreated`` event rather than a
+    wall-clock schedule, because the journal is the only user-authored input.
 
     Not scheduled automatically in local mode; use the in-process dispatcher
     (``app.jobs.in_process.dispatcher.run_job``) instead.
@@ -82,10 +83,25 @@ class WorkerSettings:
         async def cron_memory_compaction(ctx: dict[str, Any]) -> None:
             await with_user(ctx, "memory_compaction")
 
+        # One wrapper per period: arq's cron() passes only ctx, so the report
+        # type has to be baked into the coroutine rather than passed as an arg.
+        async def cron_daily_report(ctx: dict[str, Any]) -> None:
+            await with_user(ctx, "report_generation", {"report_type": "DAILY"})
+
+        async def cron_weekly_report(ctx: dict[str, Any]) -> None:
+            await with_user(ctx, "report_generation", {"report_type": "WEEKLY"})
+
+        async def cron_monthly_report(ctx: dict[str, Any]) -> None:
+            await with_user(ctx, "report_generation", {"report_type": "MONTHLY"})
+
         cls.redis_settings = RedisSettings.from_dsn(settings.redis_url)
         cls.cron_jobs = [
             # Housekeeping: Sunday 05:00.
             cron(cron_memory_compaction, weekday="sun", hour=5, minute=0),
+            # Reports fire just after midnight and cover the period that ended.
+            cron(cron_daily_report, hour=0, minute=5),
+            cron(cron_weekly_report, weekday="mon", hour=0, minute=10),
+            cron(cron_monthly_report, day=1, hour=0, minute=15),
         ]
         return cls
 

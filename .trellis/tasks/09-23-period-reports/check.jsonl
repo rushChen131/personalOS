@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "backend quality gate"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "error code + envelope"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "frontend quality gate"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "API types"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "API/UI contract"}

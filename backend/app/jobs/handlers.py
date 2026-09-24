@@ -6,53 +6,8 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.logging import logger
 from app.models.base import CandidateStatus
 from app.models.memory import Memory, MemoryCandidate, MemorySource
-from app.models.project import Goal
-
-
-class GoalProgressJob:
-    """Recompute a goal's progress from how much the user writes about it.
-
-    Journals are the only user-authored signal, so effort is proxied by the
-    number of journal entries within the window that mention the goal's theme.
-    """
-
-    #: Journal entries referencing a goal that saturate its progress at 100%.
-    ENTRIES_FOR_FULL_PROGRESS = 20
-    WINDOW_DAYS = 90
-
-    async def run(self, session: AsyncSession, user_id: str, payload: dict[str, Any]) -> dict[str, Any]:
-        from app.models.journal import Journal
-
-        goal_id = payload.get("goal_id")
-        if not goal_id:
-            return {"skipped": "no goal_id"}
-        goal = await session.scalar(select(Goal).where(Goal.id == goal_id, Goal.user_id == user_id))
-        if goal is None:
-            return {"skipped": "goal not found"}
-
-        since = datetime.now(timezone.utc) - timedelta(days=self.WINDOW_DAYS)
-        term = (goal.title or "").strip()
-        stmt = select(Journal).where(Journal.user_id == user_id, Journal.created_at >= since)
-        if term:
-            stmt = stmt.where(Journal.content.ilike(f"%{term}%"))
-        entries = list((await session.scalars(stmt)).unique())
-
-        effort = min(1.0, len(entries) / self.ENTRIES_FOR_FULL_PROGRESS)
-        confidence = 0.4 + min(0.4, len(entries) * 0.05)
-        if goal.target_date:
-            logger.info("goal.progress.recompute", goal_id=goal_id, target=str(goal.target_date))
-
-        goal.progress = round(effort * 100, 2)
-        goal.metadata_ = {
-            **(goal.metadata_ or {}),
-            "progress_source": "GOAL_PROGRESS_JOB",
-            "confidence": confidence,
-        }
-        await session.flush()
-        return {"goal_id": goal_id, "progress": goal.progress, "journal_entries": len(entries)}
 
 
 class MemoryAnalysisJob:
@@ -183,4 +138,53 @@ class MemoryCompactionJob:
             "ids": stale,
             "pruned_candidates": len(dead),
             "as_of": cutoff.isoformat(),
+        }
+
+
+class ReportGenerationJob:
+    """Build one period report from the journals already on file.
+
+    Always targets the period that has just **finished**, so a report never
+    summarises a day still in progress — which is what makes a 00:05 cron
+    correct. Weekly and monthly generation honour the matching ``UserSetting``
+    toggle; the daily report has no toggle.
+    """
+
+    #: report type -> the ``UserSetting`` flag that gates it.
+    SETTING_FLAGS = {
+        "WEEKLY": "weekly_report_enabled",
+        "MONTHLY": "monthly_report_enabled",
+    }
+
+    async def run(self, session: AsyncSession, user_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        from app.models.user import UserSetting
+        from app.services.report_engine import (
+            SUPPORTED_TYPES,
+            ReportEngine,
+            previous_period_bounds,
+        )
+
+        report_type = (payload.get("report_type") or "DAILY").upper()
+        if report_type not in SUPPORTED_TYPES:
+            return {"skipped": f"unsupported report_type: {report_type}"}
+
+        flag = self.SETTING_FLAGS.get(report_type)
+        if flag:
+            enabled = await session.scalar(
+                select(getattr(UserSetting, flag)).where(UserSetting.user_id == user_id)
+            )
+            # A user with no settings row yet keeps the column default (enabled).
+            if enabled is False:
+                return {"skipped": f"{flag} disabled"}
+
+        start, end = previous_period_bounds(report_type, datetime.now(timezone.utc).date())
+        report = await ReportEngine().generate(
+            session, user_id, report_type, period_start=start, period_end=end
+        )
+        return {
+            "report_id": report.id,
+            "type": report.type,
+            "period_start": start.isoformat(),
+            "period_end": end.isoformat(),
+            "journal_count": (report.content or {}).get("journal_count", 0),
         }
