@@ -5,10 +5,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.journal import Journal
 from app.models.memory import Memory, MemorySource
-from app.models.project import Goal
-from app.repositories.goal_repository import GoalRepository
+from app.models.project import Todo
 from app.schemas.common import ContextResponse
-from app.services.goal_service import GoalService
 
 
 class ContextService:
@@ -19,9 +17,6 @@ class ContextService:
     so "what was I doing" is answered from recent journal entries and the
     memories distilled from them, never from raw events.
     """
-
-    def __init__(self) -> None:
-        self.goal_service = GoalService(GoalRepository())
 
     async def build(
         self,
@@ -51,10 +46,10 @@ class ContextService:
                 )
                 related_memories = list((await session.scalars(mem_stmt)).unique())
 
-        elif object_type == "goal" and object_id:
-            goal = await session.get(Goal, object_id)
-            if goal is not None and goal.user_id == user_id:
-                # Memories are the durable signal about a goal's theme; journals
+        elif object_type == "todo" and object_id:
+            todo = await session.get(Todo, object_id)
+            if todo is not None and todo.user_id == user_id:
+                # Memories are the durable signal about a todo's theme; journals
                 # supply the recent narrative around it.
                 related_memories = list(
                     (

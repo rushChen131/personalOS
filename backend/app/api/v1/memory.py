@@ -23,10 +23,11 @@ async def list_memories(
     request: Request,
     limit: int = 50,
     offset: int = 0,
+    category: str | None = None,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ):
-    memories = await memory_service.list(session, user.id, limit, offset)
+    memories = await memory_service.list(session, user.id, limit, offset, category)
     return ok(request, [MemoryResponse.model_validate(m) for m in memories])
 
 

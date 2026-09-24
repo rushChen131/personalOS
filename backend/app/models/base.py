@@ -52,6 +52,40 @@ class EventType(str, Enum):
     OTHER = "OTHER"
 
 
+class Category(str, Enum):
+    """Life domain a journal, todo or memory belongs to (投资、工作、学习…).
+
+    Shared by all three so one vocabulary can group them together — everything
+    filed under INVESTMENT regardless of which module it came from. Stored as
+    ``String(32)``, so adding a member here needs no migration.
+    """
+
+    WORK = "WORK"
+    LEARNING = "LEARNING"
+    INVESTMENT = "INVESTMENT"
+    FINANCE = "FINANCE"
+    HEALTH = "HEALTH"
+    LIFE = "LIFE"
+    SOCIAL = "SOCIAL"
+    CREATIVE = "CREATIVE"
+    TRAVEL = "TRAVEL"
+    OTHER = "OTHER"
+
+
+def coerce_category(value: Category | str | None) -> str:
+    """Normalise a category to the string actually stored in the column.
+
+    Unknown or missing values fall back to ``OTHER`` so a stale client can
+    never write an unreadable domain into the table.
+    """
+    if value is None:
+        return Category.OTHER.value
+    try:
+        return Category(value).value
+    except ValueError:
+        return Category.OTHER.value
+
+
 class EventSource(str, Enum):
     MANUAL = "MANUAL"
     CHAT = "CHAT"
@@ -76,6 +110,8 @@ class MemoryType(str, Enum):
     BELIEF = "BELIEF"
     PATTERN = "PATTERN"
     RELATIONSHIP = "RELATIONSHIP"
+    # Stored values on existing rows — retained even though the Goal module is
+    # gone, exactly like PROJECT_CONTEXT outlives Project.
     GOAL_CONTEXT = "GOAL_CONTEXT"
     PROJECT_CONTEXT = "PROJECT_CONTEXT"
 
@@ -94,6 +130,7 @@ class InsightType(str, Enum):
     RISK = "RISK"
     ACHIEVEMENT = "ACHIEVEMENT"
     ANOMALY = "ANOMALY"
+    # Stored value on existing rows; the Goal module no longer emits it.
     GOAL_PROGRESS = "GOAL_PROGRESS"
     BEHAVIOR_CHANGE = "BEHAVIOR_CHANGE"
     SUGGESTION = "SUGGESTION"

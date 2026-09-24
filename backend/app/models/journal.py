@@ -7,12 +7,15 @@ from sqlalchemy import ForeignKey, Index, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import JSONB, TZDateTime, VectorType
-from app.models.base import Base, EventSource, TimestampMixin, uuid_pk
+from app.models.base import Base, Category, EventSource, TimestampMixin, uuid_pk
 
 
 class Journal(Base, TimestampMixin):
     __tablename__ = "journals"
-    __table_args__ = (Index("idx_journals_user_created", "user_id", "created_at"),)
+    __table_args__ = (
+        Index("idx_journals_user_created", "user_id", "created_at"),
+        Index("idx_journals_user_category", "user_id", "category"),
+    )
 
     id: Mapped[str] = uuid_pk()
     user_id: Mapped[str] = mapped_column(
@@ -20,6 +23,9 @@ class Journal(Base, TimestampMixin):
     )
     title: Mapped[str | None] = mapped_column(String(500), nullable=True)
     content: Mapped[str] = mapped_column(Text, nullable=False)
+    category: Mapped[str] = mapped_column(
+        String(32), nullable=False, server_default=Category.OTHER.value
+    )
     source: Mapped[str] = mapped_column(
         String(32), nullable=False, server_default=EventSource.MANUAL.value
     )

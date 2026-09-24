@@ -3,7 +3,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.bus.event_bus import EventBus
-from app.models.base import EventSource
+from app.models.base import EventSource, coerce_category
 from app.models.journal import Journal
 from app.repositories.journal_repository import JournalRepository
 from app.schemas.common import JournalCreate
@@ -19,6 +19,7 @@ class JournalService:
             user_id=user_id,
             title=data.title,
             content=data.content,
+            category=coerce_category(data.category),
             source=EventSource(data.source).value if data.source else EventSource.MANUAL.value,
             mood=data.mood,
             metadata=data.metadata,
@@ -35,9 +36,14 @@ class JournalService:
         return await self.repository.get(session, user_id, journal_id)
 
     async def list(
-        self, session: AsyncSession, user_id: str, limit: int = 100, offset: int = 0
+        self,
+        session: AsyncSession,
+        user_id: str,
+        limit: int = 100,
+        offset: int = 0,
+        category: str | None = None,
     ) -> list[Journal]:
-        return await self.repository.list(session, user_id, limit, offset)
+        return await self.repository.list(session, user_id, limit, offset, category)
 
     async def delete(self, session: AsyncSession, user_id: str, journal_id: str) -> bool:
         return await self.repository.delete(session, user_id, journal_id)

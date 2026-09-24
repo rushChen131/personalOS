@@ -37,11 +37,13 @@ class MemoryRepository:
         user_id: str,
         limit: int = 50,
         offset: int = 0,
+        category: str | None = None,
     ) -> list[Memory]:
+        stmt = select(Memory).where(Memory.user_id == user_id)
+        if category:
+            stmt = stmt.where(Memory.category == category)
         stmt = (
-            select(Memory)
-            .where(Memory.user_id == user_id)
-            .order_by(Memory.importance.desc(), Memory.created_at.desc())
+            stmt.order_by(Memory.importance.desc(), Memory.created_at.desc())
             .limit(limit)
             .offset(offset)
         )
@@ -53,6 +55,7 @@ class MemoryRepository:
         user_id: str,
         query: str | None = None,
         memory_type: str | None = None,
+        category: str | None = None,
         importance_min: float | None = None,
         from_time: datetime | None = None,
         to_time: datetime | None = None,
@@ -73,6 +76,8 @@ class MemoryRepository:
             )
         if memory_type:
             stmt = stmt.where(Memory.type == memory_type)
+        if category:
+            stmt = stmt.where(Memory.category == category)
         if importance_min is not None:
             stmt = stmt.where(Memory.importance >= importance_min)
         if from_time is not None:

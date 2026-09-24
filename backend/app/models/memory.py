@@ -7,7 +7,7 @@ from sqlalchemy import ForeignKey, Index, Numeric, String, Text, UniqueConstrain
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import JSONB, TZDateTime, VectorType
-from app.models.base import Base, CandidateStatus, MemoryType, TimestampMixin, uuid_pk
+from app.models.base import Base, CandidateStatus, Category, MemoryType, TimestampMixin, uuid_pk
 
 
 class Memory(Base, TimestampMixin):
@@ -15,6 +15,7 @@ class Memory(Base, TimestampMixin):
     __table_args__ = (
         Index("idx_memories_user_type", "user_id", "type"),
         Index("idx_memories_user_importance", "user_id", "importance"),
+        Index("idx_memories_user_category", "user_id", "category"),
     )
 
     id: Mapped[str] = uuid_pk()
@@ -22,6 +23,11 @@ class Memory(Base, TimestampMixin):
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     type: Mapped[str] = mapped_column(String(32), nullable=False, server_default=MemoryType.FACT.value)
+    # Inherited from the source journals at promotion time — memories are
+    # derived, never authored, so the domain comes from where the evidence is.
+    category: Mapped[str] = mapped_column(
+        String(32), nullable=False, server_default=Category.OTHER.value
+    )
     content: Mapped[str] = mapped_column(Text, nullable=False)
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     confidence: Mapped[float] = mapped_column(Numeric(5, 2), nullable=False, server_default="0.5")

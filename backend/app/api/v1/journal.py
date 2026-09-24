@@ -34,10 +34,11 @@ async def list_journals(
     request: Request,
     limit: int = 100,
     offset: int = 0,
+    category: str | None = None,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ):
-    journals = await journal_service.list(session, user.id, limit, offset)
+    journals = await journal_service.list(session, user.id, limit, offset, category)
     return ok(request, [JournalResponse.model_validate(j) for j in journals])
 
 

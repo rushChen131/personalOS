@@ -22,14 +22,12 @@ class JournalRepository:
         user_id: str,
         limit: int = 100,
         offset: int = 0,
+        category: str | None = None,
     ) -> list[Journal]:
-        stmt = (
-            select(Journal)
-            .where(Journal.user_id == user_id)
-            .order_by(Journal.created_at.desc())
-            .limit(limit)
-            .offset(offset)
-        )
+        stmt = select(Journal).where(Journal.user_id == user_id)
+        if category:
+            stmt = stmt.where(Journal.category == category)
+        stmt = stmt.order_by(Journal.created_at.desc()).limit(limit).offset(offset)
         return list((await session.scalars(stmt)).unique())
 
     async def delete(self, session: AsyncSession, user_id: str, journal_id: str) -> bool:

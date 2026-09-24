@@ -5,9 +5,11 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.base import CandidateStatus
+from app.models.base import CandidateStatus, Category, coerce_category
 from app.models.journal import Journal
 from app.models.memory import Memory, MemoryCandidate, MemorySource
 from app.services.journal_extractor import extract_statements
@@ -145,6 +147,18 @@ def _latin_entity(fragment: str) -> Optional[str]:
     return word
 
 
+def _is_entity_token(token: str) -> bool:
+    """Whether a whitespace token can serve as the Latin topic entity.
+
+    Digits are allowed, because ``str.isalpha()`` rejects any token containing
+    one: "我习惯用 gpt4 写文案" would then fall down the CJK path and bucket on
+    the opener verb "我习惯用" — merging unrelated entities into one bucket and
+    splitting one entity across several. Still requires a letter, so a bare
+    number ("2026") never becomes a topic.
+    """
+    return token.isascii() and len(token) > 1 and any(ch.isalpha() for ch in token)
+
+
 def _topic_key(normalized: str) -> str:
     """Reduce a normalised statement to a stable topic bucket.
 
@@ -156,28 +170,57 @@ def _topic_key(normalized: str) -> str:
 
     # Latin entity wins: "我喜欢用 Rust 写后端" -> "rust".
     for token in tokens:
-        if token.isascii() and token.isalpha() and len(token) > 1:
+        if _is_entity_token(token):
             return token
 
-    # The first CJK-bearing token (or the whole string when unsegmented).
-    candidate = ""
+    # The first token that still has something left after the openers are
+    # peeled. A token made purely of openers and particles ("我用") peels down
+    # to nothing, so keep looking: "我用 飞书 写文档" must bucket on "飞书", not
+    # on the opener "我用" — otherwise every "我用 X" statement collapses into
+    # one bucket and can promote a Memory from unrelated evidence.
     for token in tokens:
-        if token not in _CJK_STOPWORDS:
-            candidate = token
-            break
-    if not candidate:
-        candidate = normalized
+        if token in _CJK_STOPWORDS:
+            continue
+        stripped = _strip_lead(token)
+        if not stripped:
+            continue
+        return _latin_entity(stripped) or stripped[:_TOPIC_MAX_CHARS]
 
-    stripped = _strip_lead(candidate)
-    if not stripped:
-        # Everything was an opener ("我喜欢"): fall back to the raw token so we
-        # still get a stable bucket rather than dropping the statement.
-        stripped = candidate
+    # Nothing but openers ("我喜欢"): fall back to the raw text so the statement
+    # still gets a stable bucket rather than being dropped.
+    fallback = _strip_lead(normalized) or normalized
+    return _latin_entity(fallback) or fallback[:_TOPIC_MAX_CHARS]
 
-    embedded = _latin_entity(stripped)
-    if embedded:
-        return embedded
-    return stripped[:_TOPIC_MAX_CHARS]
+
+def _dominant_category(votes: dict[str, int]) -> str:
+    """Pick the most-voted category, breaking ties alphabetically.
+
+    Ties have to resolve deterministically: the evidence window has no
+    guaranteed row order, so letting "first inserted wins" would make the same
+    journals produce a different domain from one run to the next.
+    """
+    if not votes:
+        return Category.OTHER.value
+    return min(votes.items(), key=lambda item: (-item[1], item[0]))[0]
+
+
+def _insert_ignore(session: AsyncSession, values: dict[str, Any]):
+    """``INSERT ... ON CONFLICT DO NOTHING`` for the dialects this project runs.
+
+    Returns ``None`` on an unrecognised dialect so the caller can fall back to a
+    plain ORM insert rather than crash.
+    """
+    factory = {
+        "postgresql": pg_insert,
+        "sqlite": sqlite_insert,
+    }.get(session.get_bind().dialect.name)
+    if factory is None:
+        return None
+    return (
+        factory(MemoryCandidate)
+        .values(**values)
+        .on_conflict_do_nothing(index_elements=["user_id", "signature"])
+    )
 
 
 class MemoryEngine:
@@ -213,6 +256,58 @@ class MemoryEngine:
             "promoted_memory_ids": promoted,
         }
 
+    async def _get_or_create_bucket(
+        self,
+        session: AsyncSession,
+        *,
+        user_id: str,
+        signature: str,
+        topic: str,
+        statement: str,
+    ) -> MemoryCandidate:
+        """Create the evidence bucket, tolerating a concurrent creator.
+
+        The bucket ``SELECT`` cannot see a row another request is committing
+        right now: follow-up jobs drain *after* the HTTP response, so a client
+        writing entries back-to-back overlaps ingests. A plain ORM insert would
+        hit ``uq_memory_candidates_user_signature`` and abort the whole ingest,
+        silently discarding that journal's evidence.
+
+        A SAVEPOINT cannot rescue it either: SQLAlchemy marks the **outer**
+        transaction as needing a rollback when a flush inside a savepoint fails
+        (``SessionTransaction.rollback(_capture_exception=True)`` propagates to
+        the parent), so every later query raises ``PendingRollbackError``.
+        Instead, insert with ``ON CONFLICT DO NOTHING`` and re-read: the loser
+        adopts the winner's row and both journals' evidence survives.
+        """
+        values = {
+            "user_id": user_id,
+            "signature": signature,
+            "type": "PATTERN",
+            "topic": topic,
+            "content": statement,
+            "evidence": {},
+            "evidence_count": 0,
+            "confidence": 0.0,
+            "status": CandidateStatus.PENDING.value,
+        }
+        insert_stmt = _insert_ignore(session, values)
+        if insert_stmt is None:
+            # Unrecognised dialect: plain insert, flushed by the SELECT below.
+            session.add(MemoryCandidate(**values))
+        else:
+            await session.execute(insert_stmt)
+
+        created = await session.scalar(
+            select(MemoryCandidate).where(
+                MemoryCandidate.user_id == user_id,
+                MemoryCandidate.signature == signature,
+            )
+        )
+        if created is None:  # pragma: no cover - the row must exist at this point
+            raise RuntimeError(f"memory candidate bucket not found after insert: {signature}")
+        return created
+
     async def _ingest_statement(
         self,
         session: AsyncSession,
@@ -238,19 +333,13 @@ class MemoryEngine:
             )
         )
         if candidate is None:
-            candidate = MemoryCandidate(
+            candidate = await self._get_or_create_bucket(
+                session,
                 user_id=user_id,
                 signature=signature,
-                type="PATTERN",
                 topic=topic,
-                content=statement,
-                evidence={},
-                evidence_count=0,
-                confidence=0.0,
-                status=CandidateStatus.PENDING.value,
+                statement=statement,
             )
-            session.add(candidate)
-            await session.flush()
         elif candidate.status == CandidateStatus.PROMOTED.value:
             # Already a memory; keep refreshing recency/evidence silently.
             candidate.last_seen_at = datetime.now(timezone.utc)
@@ -268,6 +357,9 @@ class MemoryEngine:
 
         distinct_statements: set[str] = set()
         source_ids: list[str] = []
+        # One vote per contributing journal, so a single chatty entry cannot
+        # decide the domain on its own.
+        category_votes: dict[str, int] = {}
         matched = 0
         for other in window_journals:
             for other_statement in extract_statements(other.content or ""):
@@ -280,11 +372,13 @@ class MemoryEngine:
                 distinct_statements.add(other_normalized)
                 if other.id not in source_ids:
                     source_ids.append(other.id)
+                    category_votes[other.category] = category_votes.get(other.category, 0) + 1
 
         candidate.evidence_count = matched
         candidate.evidence = {
             "statements": sorted(distinct_statements),
             "source_journal_ids": source_ids,
+            "category": _dominant_category(category_votes),
         }
         candidate.confidence = self._confidence(matched, len(distinct_statements))
         candidate.last_seen_at = datetime.now(timezone.utc)
@@ -331,6 +425,9 @@ class MemoryEngine:
         memory = Memory(
             user_id=candidate.user_id,
             type=candidate.type,
+            # Memories are never authored, so the domain is inherited from the
+            # journals that produced the evidence.
+            category=coerce_category((candidate.evidence or {}).get("category")),
             content=candidate.content,
             summary=candidate.topic,
             confidence=float(candidate.confidence),
