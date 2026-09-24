@@ -2,7 +2,7 @@
 
 [English](README.md) | **简体中文**
 
-个人生活操作系统：**日志是唯一的人工输入口**，围绕它生长出目标、长期记忆，以及一个能从你的日常书写中蒸馏出长期事实的 AI 层。
+个人生活操作系统：**日志是唯一的人工输入口**，围绕它生长出待办清单、长期记忆、周期报告，以及一个能从你的日常书写中蒸馏出长期事实的 AI 层。
 
 支持两条运行路径：
 
@@ -135,14 +135,26 @@ OPENAI_API_KEY=sk-...
 |---|---|
 | 认证 | `POST /auth/login`、`GET /auth/me`、`GET /auth/bootstrap` |
 | 日志 | `GET/POST /journals`、`GET/DELETE /journals/{id}` |
-| 目标 | `GET/POST /goals`、`GET/PUT/DELETE /goals/{id}`、`POST /goals/{id}/metrics` |
-| 项目 | `GET/POST /projects`、`GET/PUT /projects/{id}` |
+| 待办 | `GET/POST /todos`、`GET/PUT/DELETE /todos/{id}` |
 | 记忆 | `GET /memories`、`GET /memories/{id}`、`POST /memories/search` |
+| 报告 | `GET /reports`、`POST /reports/generate`、`GET/DELETE /reports/{id}` |
 | 对话 | `POST /chat` **（SSE）**、`GET/POST /chat/conversations`、`GET /chat/conversations/{id}` |
 | 动作 | `POST /actions/{id}/confirm` |
 | 上下文 | `GET /context` |
 
-> **日志是唯一的人工输入。** `Journal → Candidate → Memory` 流水线直接从日志正文中蒸馏长期事实，目标进度任务同样读日志。`Event`、`Report`、`Insight` 三个模块已从 API 和 UI 退役：模型与数据表为向后兼容而保留，但**已不存在任何读写它们的代码路径**。`POST /memories` 随之一并删除 —— 记忆不能手工录入。
+`GET /journals`、`GET /todos`、`GET /memories` 均支持 `?category=` 过滤；`/memories/search` 在请求体里接收 `category`。`GET /todos` 还支持 `?completed=true|false`，用来只看已完成或只看未完成。
+
+> **一条待办是清单项，不是进度条。** `POST /todos` 只收 `title` 与 `category`；完成态是一个可空的 `completed_at` 时间戳 —— `null` 表示未完成，有值表示已完成**且该值就是完成时刻**。没有 `status`/`progress` 这一对字段，也就不可能出现「ACTIVE 但 100%」这种自相矛盾的行。`PUT /todos/{id}` 同时是勾选/取消勾选的接口：`{"completed": true}` 由服务端盖上时间戳，`{"completed": false}` 清空它。旧的 `/goals` 路由与 `/goals/{id}/metrics` 入口已删除（`404`）；`todo_metrics` 表保留但不再对外暴露。
+
+> **日志是唯一的人工输入。** `Journal → Candidate → Memory` 流水线直接从日志正文中蒸馏长期事实。`Event`、`Insight`、`Goal` 三个模块已从 API 和 UI 退役：模型与数据表为向后兼容而保留（目标是被**改名**成待办，数据整行搬过去了），但**已不存在任何读写它们的代码路径**。`POST /memories` 随之一并删除 —— 记忆不能手工录入。
+
+> **报告是「算出来的」，不是「写出来的」。** `POST /reports/generate` 把一个周期内的日志折叠成一行 `Report`：篇数、活跃天数、类型与心情分布、本期推进的待办与沉淀的记忆，以及若干条高亮。引擎是**纯聚合**（不调 LLM），所以同一批日志永远算出同一份报告。生成是**幂等**的：同一组 `(type, period_start, period_end, dimension)` 重复请求会返回已有那行，而不是再建一行。`dimension` 用来把报告限定在单个 `Category` 上，不传（或传 `ALL`）表示全生活域。支持的类型是 `DAILY` / `WEEKLY` / `MONTHLY`，其它值一律 `422`。
+>
+> `period_start` / `period_end` 是显式的 `YYYY-MM-DD` 边界，**日历由调用方决定**：部署环境不保证有 `zoneinfo`，所以服务端只认 UTC 一种日历，绝不猜本地日历；Web 前端自己算真实本地日期再显式传过来。不传边界时服务端取包含今天的那个周期，周以**周一**为起点（ISO）。
+>
+> 定时任务受 `weekly_report_enabled` / `monthly_report_enabled` 两个用户设置控制。开启后，`daily_report` / `weekly_report` / `monthly_report` 三个 cron 会为**刚刚结束**的那个周期生成报告。用进程内调度器（无 Redis）时跑在 API 进程里；设了 `REDIS_URL` 则由 arq worker 执行。
+
+> **日志、待办、记忆都有「类型」字段**（投资 / 工作 / 学习 …，见 `models/base.py::Category`）。日志与待办的类型由客户端指定；**记忆的类型是继承来的** —— 取它来源日志里占比最高的那个类型，因为记忆从不手工创建。该列为 `NOT NULL` + `server_default='OTHER'`，老客户端不传也不会失败。
 
 ### 对话流式协议
 
@@ -164,21 +176,21 @@ event: done         data: {"conversation_id": "...", "success": true}
 ## AI 层
 
 - **5 个 Agent**（`app/ai/agents/base.py`）：`personal_manager`、`journal_agent`、
-  `goal_agent`、`memory_agent`、`coach_agent`。
+  `todo_agent`、`memory_agent`、`coach_agent`。
   每个 Agent 都声明自己的 `tools` 与 `permissions`；注册表按权限过滤工具 schema，越权时返回
   `TOOL_PERMISSION_DENIED`。
-- **工具**（`app/ai/tools/registry.py`）：`query_journals`、`query_goals`、
-  `search_memory`、`calendar_tool`（占位）。
+- **工具**（`app/ai/tools/registry.py`）：`query_journals`、`query_todos`、
+  `search_memory`、`query_reports`、`calendar_tool`（占位）。
 - **RAG**（`app/ai/rag/runtime.py`）：在 SQLite/PG 上对记忆与日志做「关键词 + 重要性 + 时效性」混合打分。pgvector 的余弦检索挂在显式开关后面，因此永远不会影响 SQLite 下的结果。
 - **动作提案**：高风险工具返回带 `requires_confirmation` 的提案，通过 `POST /actions/{id}/confirm` 确认。
 - **链路追踪**：每次运行都会写入 `agent_runs` + `tool_runs`（agent、model、输入、输出、状态、耗时、token）。
 
 ## 后台任务
 
-- `app/jobs/handlers.py` —— `GoalProgressJob`、`MemoryAnalysisJob`、
-  `EmbeddingJob`、`MemoryCompactionJob`。
-- `app/jobs/in_process.py` —— 本地调度器。把 `JournalCreated` 扇出为「向量化 + 记忆蒸馏 + 目标进度」。请求期间入队的任务会在其事务**提交之后**才执行。
-- `app/jobs/worker.py` —— arq worker 定义与 cron 排程（记忆压缩：周日 05:00）。
+- `app/jobs/handlers.py` —— `MemoryAnalysisJob`、
+  `EmbeddingJob`、`MemoryCompactionJob`、`ReportGenerationJob`。
+- `app/jobs/in_process.py` —— 本地调度器。把 `JournalCreated` 扇出为「向量化 + 记忆蒸馏」。请求期间入队的任务会在其事务**提交之后**才执行。
+- `app/jobs/worker.py` —— arq worker 定义与 cron 排程（记忆压缩：周日 05:00；日报 / 周报 / 月报生成）。
 - `app/jobs/worker_main.py` —— 容器入口（`python -m app.jobs.worker`）。
 
 ## 引擎
@@ -186,6 +198,10 @@ event: done         data: {"conversation_id": "...", "success": true}
 - **MemoryEngine**（`app/services/memory_engine.py`）+ `journal_extractor.py`：
   从日志正文中抽出第一人称陈述，按主体聚桶；只有当某个桶越过 §83 的
   证据数 / 置信度阈值后，才会晋级为一条 `Memory`。
+- **ReportEngine**（`app/services/report_engine.py`）：对某个日志窗口做**确定性聚合**，
+  产出一行 `Report`。不调 LLM、不含随机性 —— 同一批日志永远算出同一份报告。
+  按 `(type, period_start, period_end, dimension)` 幂等，并用模块级 per-user 锁
+  保证并发生成收敛到同一行。
 
 > 基于规则的 **InsightEngine** 及其 `GET /insights` 列表已退役：记忆蒸馏本身就在回答
 > 「什么在反复出现」，两者功能重叠。`Insight` 模型与 `insights` 数据表为向后兼容而保留。
@@ -201,7 +217,7 @@ make typecheck   # tsc --noEmit
 make migrate     # alembic upgrade head
 ```
 
-后端测试覆盖核心 API 流程、AI 层（Agent、工具、权限、RAG、SSE 事件顺序）以及任务层（记忆流水线、目标进度、各引擎）。
+后端测试覆盖核心 API 流程、AI 层（Agent、工具、权限、RAG、SSE 事件顺序）以及任务层（记忆流水线、各引擎、报告）。
 
 ## 许可证
 

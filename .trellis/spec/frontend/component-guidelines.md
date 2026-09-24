@@ -19,16 +19,16 @@ class-component code. Two kinds exist and must not blur together:
 ```tsx
 "use client";                                  // only when hooks/events are used
 
-import { Card, EmptyState, ProgressBar } from "@/components/ui";
-import { useGoals } from "@/hooks/useApi";
+import { Card, EmptyState } from "@/components/ui";
+import { useTodos } from "@/hooks/useApi";
 
-export function GoalList() {                   // named export, PascalCase
-  const goals = useGoals();
-  if (!goals.data?.length) return <EmptyState message="No goals yet." />;
+export function TodoList() {                   // named export, PascalCase
+  const todos = useTodos();
+  if (!todos.data?.length) return <EmptyState message="No todos yet." />;
   return (
-    <Card title="Goals">
-      {goals.data.map((goal) => (
-        <div key={goal.id}>{goal.title}</div>    // stable, entity-derived key
+    <Card title="Todos">
+      {todos.data.map((todo) => (
+        <div key={todo.id}>{todo.title}</div>    // stable, entity-derived key
       ))}
     </Card>
   );

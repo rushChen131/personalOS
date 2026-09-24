@@ -78,7 +78,7 @@ stream as a query.
 
 | Kind | Pattern | Example |
 |---|---|---|
-| Read hook | `use` + plural entity | `useGoals`, `useMemories` |
+| Read hook | `use` + plural entity | `useTodos`, `useMemories` |
 | Mutation hook | `use` + verb + entity | `useCreateEvent`, `useGenerateReport` |
 | Private helper | `use` + effect | `useInvalidateActivity` |
 | Query key | `queryKeys.<entity>(params)` | `queryKeys.memories(type)` |
@@ -89,7 +89,7 @@ stream as a query.
 
 - **Fetching in `useEffect`.** Use TanStack Query; manual effects lose caching,
   dedupe and invalidation.
-- **Inline query keys** (`useQuery({ queryKey: ["goals"] })`) scattered across
+- **Inline query keys** (`useQuery({ queryKey: ["todos"] })`) scattered across
   files — invalidation then silently misses. Always go through `queryKeys`.
 - **Forgetting invalidation**, so a new event does not refresh the dashboard.
 - **Awaiting a mutation and reading its result as truth.** The authoritative data

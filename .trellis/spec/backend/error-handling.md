@@ -13,7 +13,7 @@ into the same envelope shape:
 ```json
 {
   "success": false,
-  "error": { "code": "GOAL_NOT_FOUND", "message": "Goal 3f9... does not exist" },
+  "error": { "code": "TODO_NOT_FOUND", "message": "Todo 3f9... does not exist" },
   "request_id": "req_a1b2c3d4e5f6"
 }
 ```
@@ -47,7 +47,7 @@ casually. Add new members; do not repurpose existing ones.
 | --- | --- |
 | Auth | `AUTH_UNAUTHORIZED` |
 | Generic resource | `RESOURCE_NOT_FOUND`, `VALIDATION_ERROR`, `NOT_IMPLEMENTED`, `INTERNAL_ERROR` |
-| Per-resource not-found | `GOAL_NOT_FOUND`, `PROJECT_NOT_FOUND`, `EVENT_NOT_FOUND`, `JOURNAL_NOT_FOUND`, `MEMORY_NOT_FOUND`, `REPORT_NOT_FOUND`, `AGENT_NOT_FOUND`, `TOOL_NOT_FOUND` |
+| Per-resource not-found | `TODO_NOT_FOUND`, `PROJECT_NOT_FOUND`, `EVENT_NOT_FOUND`, `JOURNAL_NOT_FOUND`, `MEMORY_NOT_FOUND`, `REPORT_NOT_FOUND`, `AGENT_NOT_FOUND`, `TOOL_NOT_FOUND` |
 | AI / tools | `TOOL_PERMISSION_DENIED`, `AGENT_EXECUTION_FAILED`, `LLM_ERROR`, `VECTOR_SEARCH_ERROR` |
 
 ### `AppError` — the base class
@@ -68,7 +68,7 @@ inventing new exception hierarchies.
 
 | Class | Status | Code | Use |
 | --- | --- | --- | --- |
-| `NotFoundError` | `404` | caller-supplied | Missing resource: `raise NotFoundError(ErrorCode.GOAL_NOT_FOUND, f"Goal {id} does not exist")` |
+| `NotFoundError` | `404` | caller-supplied | Missing resource: `raise NotFoundError(ErrorCode.TODO_NOT_FOUND, f"Todo {id} does not exist")` |
 | `PermissionDeniedError` | `403` | `TOOL_PERMISSION_DENIED` | Agent attempted a tool outside its granted permission set |
 
 Both are thin convenience wrappers — if you need a different status code,
@@ -86,11 +86,11 @@ signal "not found". The API layer does not wrap service calls in
 
 ```python
 # repository
-async def get(self, goal_id: str) -> Goal:
-    goal = await self.session.get(Goal, goal_id)
-    if goal is None:
-        raise NotFoundError(ErrorCode.GOAL_NOT_FOUND, f"Goal {goal_id} does not exist")
-    return goal
+async def get(self, todo_id: str) -> Todo:
+    todo = await self.session.get(Todo, todo_id)
+    if todo is None:
+        raise NotFoundError(ErrorCode.TODO_NOT_FOUND, f"Todo {todo_id} does not exist")
+    return todo
 ```
 
 ### Where each layer stands
@@ -121,12 +121,12 @@ Routers must **raise** instead, and let the central handler attach the status:
 
 ```python
 # wrong — status is 200
-if goal is None:
-    return error(request, ErrorCode.GOAL_NOT_FOUND.value, "Goal not found")
+if todo is None:
+    return error(request, ErrorCode.TODO_NOT_FOUND.value, "Todo not found")
 
 # right — status is 404, body identical
-if goal is None:
-    raise NotFoundError(ErrorCode.GOAL_NOT_FOUND, "Goal not found")
+if todo is None:
+    raise NotFoundError(ErrorCode.TODO_NOT_FOUND, "Todo not found")
 ```
 
 `error()` remains public only for the exception handlers themselves and for the
@@ -187,10 +187,10 @@ def ok(request: Request, data: Any = None) -> dict:
 Usage in a handler:
 
 ```python
-@router.get("/{goal_id}")
-async def get_goal(goal_id: str, request: Request, session: AsyncSession = Depends(get_db)):
-    goal = await goal_service.get(session, goal_id)
-    return ok(request, GoalResponse.model_validate(goal))
+@router.get("/{todo_id}")
+async def get_todo(todo_id: str, request: Request, session: AsyncSession = Depends(get_db)):
+    todo = await todo_service.get(session, todo_id)
+    return ok(request, TodoResponse.model_validate(todo))
 ```
 
 ### The chat endpoint is the one exception

@@ -80,9 +80,9 @@ queries are needed → service method → router in `api/v1/` registered in `mai
 | Kind | Convention | Example |
 |---|---|---|
 | Module | `snake_case`, singular noun | `insight_engine.py` |
-| Router file | singular resource name | `api/v1/goal.py` |
-| Service / Repository class | `<Aggregate>Service` / `<Aggregate>Repository` | `GoalService` |
-| Pydantic model | `<Entity><Action>` | `EventCreate`, `GoalUpdate` |
+| Router file | singular resource name | `api/v1/todo.py` |
+| Service / Repository class | `<Aggregate>Service` / `<Aggregate>Repository` | `TodoService` |
+| Pydantic model | `<Entity><Action>` | `EventCreate`, `TodoUpdate` |
 | Error code | `SCREAMING_SNAKE` | `TOOL_PERMISSION_DENIED` |
 | Event name | PascalCase verb-past | `EventCreated`, `ReportGenerated` |
 
@@ -90,7 +90,7 @@ queries are needed → service method → router in `api/v1/` registered in `mai
 
 ## Examples
 
-- **Clean API layer**: `app/api/v1/goal.py` — validation, one service call, `ok()`.
+- **Clean API layer**: `app/api/v1/todo.py` — validation, one service call, `ok()`.
 - **Service with events**: `app/services/event_service.py` — writes, then
   publishes `EventCreated`.
 - **Derived logic**: `app/services/report_engine.py` — pure aggregation with a

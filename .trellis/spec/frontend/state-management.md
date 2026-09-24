@@ -31,26 +31,30 @@ exported `queryKeys` object.
 
 ```ts
 export const queryKeys = {
-  events: (limit?: number) => ["events", limit ?? "all"] as const,
-  goals: ["goals"] as const,
+  journals: (category?: Category) => ["journals", category ?? "all"] as const,
+  todos: (completed?: boolean) => ["todos", completed === undefined ? "all" : String(completed)] as const,
   // ...
 };
 
-export function useGoals() {
-  return useQuery({ queryKey: queryKeys.goals, queryFn: () => api.listGoals() });
+export function useTodos(completed?: boolean) {
+  return useQuery({
+    queryKey: queryKeys.todos(completed),
+    queryFn: () => api.listTodos({ completed }),
+  });
 }
 ```
 
-**Mutations invalidate what they affect.** Creating an event changes events,
-timeline, stats, goals, insights *and* reports — because the backend triggers the
-memory-analysis and goal-progress jobs on `EventCreated`. That fan-out lives in a
-single helper so no mutation forgets a key:
+**Mutations invalidate what they affect.** Creating a journal changes journals
+*and* memories — because the backend triggers the embedding + memory-analysis
+jobs on `JournalCreated`. Todos are independent of that pipeline, so they get
+their own helper. The fan-out lives in a single helper so no mutation forgets a
+key:
 
 ```ts
 function useInvalidateActivity() {
   const client = useQueryClient();
   return () => {
-    for (const key of [["events"], ["timeline"], ["stats"], ["goals"], ["insights"], ["reports"]]) {
+    for (const key of [["journals"], ["todos"], ["memories"]]) {
       void client.invalidateQueries({ queryKey: key });
     }
   };

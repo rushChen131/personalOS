@@ -49,13 +49,13 @@ unloaded relationship **after** the session closes raises
 with `selectinload` (preferred for collections) or `joinedload` (1:1).
 
 ```python
-stmt = select(Event).options(selectinload(Event.goals), selectinload(Event.tags))
+stmt = select(Event).options(selectinload(Event.todos), selectinload(Event.tags))
 ```
 
 This bit the jobs layer specifically: both
-`services/_refresh_goal_progress_for_event` and `services/report_engine`,
-which read `event.goals` after the handler's session had been detached, needed
-`selectinload(Event.goals)` on the originating events query.
+`services/report_engine` and the AI context runtime,
+which read `event.todos` after the handler's session had been detached, needed
+`selectinload(Event.todos)` on the originating events query.
 
 **Rule of thumb:** if a field is in a response schema and comes from a
 relationship, the query that loads the parent must eager-load it.
@@ -65,7 +65,7 @@ relationship, the query that loads the parent must eager-load it.
 Use `.in_()` for lookups by id list; avoid N+1 loops:
 
 ```python
-goals = list(await session.scalars(select(Goal).where(Goal.id.in_(goal_ids))))
+todos = list(await session.scalars(select(Todo).where(Todo.id.in_(todo_ids))))
 ```
 
 For aggregate counts, prefer a `select(func.count())` over loading rows.
@@ -154,14 +154,14 @@ Rules that apply now and after Alembic lands:
 
 | Object | Convention | Example |
 | --- | --- | --- |
-| Table | plural `snake_case` | `events`, `goal_projects`, `agent_runs` |
+| Table | plural `snake_case` | `events`, `todo_projects`, `agent_runs` |
 | Column | `snake_case` | `start_time`, `duration_minutes` |
 | Primary key | `id` | `id` |
-| Foreign key | `<entity>_id` | `project_id`, `goal_id`, `user_id` |
+| Foreign key | `<entity>_id` | `project_id`, `todo_id`, `user_id` |
 | Timestamp | `_at` suffix, `*_tz`-aware | `created_at`, `last_verified_at`, `discovered_at` |
 | Date (no time) | `_date` / bare noun | `start_date`, `target_date` |
 | Boolean | `is_*` / `has_*` | `is_archived` |
-| Association table | `<a>_<b>` alphabetical | `goal_projects` |
+| Association table | `<a>_<b>` alphabetical | `todo_projects` |
 | Index | `ix_<table>_<column>` (SQLAlchemy default) | `ix_events_start_time` |
 | Enum-valued column | `UPPER_SNAKE` strings | `status = "ACTIVE"` |
 
@@ -185,7 +185,7 @@ compatibility. Validate the allowed set in the Pydantic schema / service layer.
 - **Using `String` for ids** instead of `UUIDType`, which desynchronises PG and
   SQLite behaviour.
 - **Mutating a relationship list without loading it** — assign
-  `obj.goals = [...]` after `selectinload`ing it, never `.append` onto an
+  `obj.todos = [...]` after `selectinload`ing it, never `.append` onto an
   unloaded collection.
 - **`echo=True` left on.** `create_async_engine(..., echo=False)` — use structlog
   for query observability instead of dumping SQL.

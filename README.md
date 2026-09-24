@@ -2,9 +2,9 @@
 
 **English** | [简体中文](README.zh-CN.md)
 
-A personal life operating system: journals as the single authored input, with
-goals, long-term memories and an AI layer that distils durable facts from your
-daily writing.
+A personal life operating system: journals as the single authored input, with a
+todo checklist, long-term memories, periodic reports and an AI layer that
+distils durable facts from your daily writing.
 
 Two run paths are supported:
 
@@ -142,20 +142,62 @@ Base path `/api/v1`. Every JSON response uses the envelope
 |---|---|
 | Auth | `POST /auth/login`, `GET /auth/me`, `GET /auth/bootstrap` |
 | Journals | `GET/POST /journals`, `GET/DELETE /journals/{id}` |
-| Goals | `GET/POST /goals`, `GET/PUT/DELETE /goals/{id}`, `POST /goals/{id}/metrics` |
-| Projects | `GET/POST /projects`, `GET/PUT /projects/{id}` |
+| Todos | `GET/POST /todos`, `GET/PUT/DELETE /todos/{id}` |
 | Memories | `GET /memories`, `GET /memories/{id}`, `POST /memories/search` |
+| Reports | `GET /reports`, `POST /reports/generate`, `GET/DELETE /reports/{id}` |
 | Chat | `POST /chat` **(SSE)**, `GET/POST /chat/conversations`, `GET /chat/conversations/{id}` |
 | Actions | `POST /actions/{id}/confirm` |
 | Context | `GET /context` |
 
+`GET /journals`, `GET /todos` and `GET /memories` all accept a `?category=`
+filter; `/memories/search` takes `category` in its body. `GET /todos` also takes
+`?completed=true|false` to list only done or only open items.
+
+> **A todo is a checklist item, not a progress bar.** `POST /todos` takes a
+> `title` and a `category`; completion is a single nullable `completed_at`
+> timestamp — `null` means open, a value means done *and* records when. There is
+> no `status`/`progress` pair to disagree with itself. `PUT /todos/{id}` is also
+> the check/uncheck call: `{"completed": true}` stamps the timestamp server-side,
+> `{"completed": false}` clears it. The old `/goals` route and the
+> `/goals/{id}/metrics` entry point are gone (`404`); the `todo_metrics` table is
+> retained but no longer exposed.
+
 > **Journals are the only authored input.** The `Journal → Candidate → Memory`
-> pipeline distils long-term facts straight out of journal body text, and the
-> goal-progress job reads journals too. The `Event`, `Report` and `Insight`
-> modules have been retired from the API and UI: their models and tables
-> are retained for backward compatibility, but there is no longer any code path
-> that reads or writes them. `POST /memories` was removed with them — memories
-> cannot be entered by hand.
+> pipeline distils long-term facts straight out of journal body text. The
+> `Event`, `Insight` and `Goal` modules have been retired from the API and UI:
+> their models and tables are retained for backward compatibility (goals were
+> *renamed* to todos, carrying their rows across), but there is no longer any
+> code path that reads or writes them. `POST /memories` was removed with them —
+> memories cannot be entered by hand.
+
+> **Reports are generated, never written.** `POST /reports/generate` folds a
+> period's journals into one `Report` row: counts, active days, category and
+> mood breakdowns, the todos and memories that moved, and a few highlights. The
+> engine is pure aggregation — no LLM — so a report is reproducible from the
+> journals alone. Generation is **idempotent**: re-requesting the same
+> `(type, period_start, period_end, dimension)` returns the existing row rather
+> than creating a second one. `dimension` scopes a report to a single
+> `Category`; omit it (or send `ALL`) for the whole life. Supported types are
+> `DAILY`, `WEEKLY` and `MONTHLY` — anything else is a `422`.
+>
+> `period_start`/`period_end` are explicit `YYYY-MM-DD` bounds, so the caller
+> owns the calendar: `zoneinfo` is not guaranteed to be available on every
+> deployment target, so the server treats UTC as its only calendar rather than
+> guessing a local one. The web UI computes true local dates and sends them
+> explicitly. Omit the bounds and the server uses the period containing today,
+> with ISO weeks starting Monday.
+>
+> The `weekly_report_enabled` / `monthly_report_enabled` user settings gate the
+> scheduled jobs. When enabled, `daily_report`, `weekly_report` and
+> `monthly_report` crons write the report for the period that just **ended**.
+> With the in-process dispatcher (no Redis) they run from the API process; with
+> `REDIS_URL` set they run on the arq worker.
+
+> **Every journal, todo and memory carries a life-domain category** (投资 / 工作 /
+> 学习 …, see `models/base.py::Category`). Journals and todos take it from the
+> client; memories **inherit** the dominant category of the journals they were
+> distilled from, because memories are never authored. The column is `NOT NULL`
+> with a server default of `OTHER`, so older clients keep working.
 
 ### Chat streaming protocol
 
@@ -179,11 +221,11 @@ event: done         data: {"conversation_id": "...", "success": true}
 ## AI layer
 
 - **5 agents** (`app/ai/agents/base.py`): `personal_manager`, `journal_agent`,
-  `goal_agent`, `memory_agent`, `coach_agent`.
+  `todo_agent`, `memory_agent`, `coach_agent`.
   Each declares `tools` and `permissions`; the registry filters tool schemas by
   permission and returns `TOOL_PERMISSION_DENIED` on violation.
-- **Tools** (`app/ai/tools/registry.py`): `query_journals`, `query_goals`,
-  `search_memory`, `calendar_tool` (placeholder).
+- **Tools** (`app/ai/tools/registry.py`): `query_journals`, `query_todos`,
+  `search_memory`, `query_reports`, `calendar_tool` (placeholder).
 - **RAG** (`app/ai/rag/runtime.py`): hybrid keyword + importance + recency
   scoring over memories and journals in SQLite/PG. pgvector cosine search is wired
   behind an explicit filter flag so it never affects SQLite results.
@@ -194,13 +236,13 @@ event: done         data: {"conversation_id": "...", "success": true}
 
 ## Background jobs
 
-- `app/jobs/handlers.py` — `GoalProgressJob`, `MemoryAnalysisJob`,
-  `EmbeddingJob`, `MemoryCompactionJob`.
+- `app/jobs/handlers.py` — `MemoryAnalysisJob`, `EmbeddingJob`,
+  `MemoryCompactionJob`, `ReportGenerationJob`.
 - `app/jobs/in_process.py` — local dispatcher. Wires `JournalCreated → embedding
-  + memory distillation + goal progress`. Jobs queued during a
-  request run **after** its transaction commits.
+  + memory distillation`. Jobs queued during a request run **after** its
+  transaction commits.
 - `app/jobs/worker.py` — arq worker definition with cron schedules (memory
-  compaction Sun 05:00).
+  compaction Sun 05:00, daily/weekly/monthly report generation).
 - `app/jobs/worker_main.py` — container entry point (`python -m app.jobs.worker`).
 
 ## Engines
@@ -209,6 +251,11 @@ event: done         data: {"conversation_id": "...", "success": true}
   pulls first-person statements out of journal body text, buckets them by leading
   entity, and promotes a bucket to a `Memory` only once it clears the §83
   evidence/confidence thresholds.
+- **ReportEngine** (`app/services/report_engine.py`): deterministic aggregation
+  over a journal window into a `Report` row. No LLM, no randomness — the same
+  journals always produce the same report. Idempotent per
+  `(type, period_start, period_end, dimension)`, guarded by a module-level
+  per-user lock so concurrent generates collapse onto one row.
 
 > The rule-based **InsightEngine** and its `GET /insights` feed were retired:
 > memory distillation already answers "what keeps coming up", so the two
@@ -227,7 +274,7 @@ make migrate     # alembic upgrade head
 ```
 
 Backend tests cover the core API flow, the AI layer (agents, tools, permissions,
-RAG, SSE ordering) and the jobs layer (memory pipeline, goal progress, engines).
+RAG, SSE ordering) and the jobs layer (memory pipeline, engines, reports).
 
 ## License
 

@@ -42,7 +42,7 @@ The goal is to help AI assistants and new team members understand how YOUR proje
 - **Chat stream**: `POST /api/v1/chat` → `text/event-stream`, order
   `start → thinking → (tool_call → tool_result)* → content → done`
 - **Agent loop**: bounded to 3 tool rounds; tools gated by `ToolRegistry` permissions
-- **Event chain**: `EventCreated` → goal progress → memory candidate → insight/report
+- **Journal chain**: `JournalCreated` → embedding + memory candidate → promoted memory → report
 - **Job draining**: follow-up jobs run in `get_db()` **after** commit
 
 ---

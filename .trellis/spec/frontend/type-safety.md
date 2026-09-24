@@ -43,7 +43,7 @@ The generic is unwrapped once, in `lib/api.ts`, so callers receive `T` directly:
 
 ```ts
 export const api = {
-  listGoals: () => request<Goal[]>("/goals"),
+  listTodos: () => request<Todo[]>("/todos"),
 };
 ```
 
@@ -75,12 +75,12 @@ payloads with a typed error code, and the UI surfaces `error.message`.
 
 ## Common Patterns
 
-**Union types for closed sets.** Event types, memory types and goal statuses are
+**Union types for closed sets.** Categories, memory types and report types are
 unions, not `string`:
 
 ```ts
-export type EventType = "WORK" | "LEARNING" | "LIFE" | /* ... */ "OTHER";
-export type GoalStatus = "ACTIVE" | "COMPLETED" | "PAUSED" | "ABANDONED";
+export type Category = "WORK" | "LEARNING" | "LIFE" | /* ... */ "OTHER";
+export type ReportType = "DAILY" | "WEEKLY" | "MONTHLY";
 ```
 
 Keeping the union in sync with the backend enum makes an invalid value a compile

@@ -23,24 +23,22 @@ frontend/
 │   │   ├── providers.tsx       TanStack Query client
 │   │   ├── globals.css         Tailwind entry + CSS design tokens
 │   │   ├── page.tsx            Redirects to /dashboard
-│   │   ├── dashboard/          Overview: stats, goals, insights, recent events
-│   │   ├── timeline/           Event list + manual event creation
+│   │   ├── dashboard/          Overview: stats, todos, journals, memories
 │   │   ├── journals/           Journal editor and reader
-│   │   ├── goals/              Goal list + creation
-│   │   ├── projects/           Project list + creation
-│   │   ├── memories/           Memory browse, search, creation
 │   │   ├── reports/            Report generation and rendering
-│   │   └── chat/               SSE streaming chat
+│   │   └── settings/           Account, language switch, sign-out
 │   ├── components/             Presentational components
-│   │   ├── AppShell.tsx        Sidebar nav + auth gate
+│   │   ├── AppShell.tsx        Header + auth gate + Copilot panel host
+│   │   ├── CopilotPanel.tsx    SSE streaming chat sidebar
 │   │   ├── LoginPanel.tsx      Credential form
 │   │   ├── BarChart.tsx        Dependency-free SVG chart
-│   │   └── ui.tsx              Card, StatTile, Badge, ProgressBar, states
+│   │   └── ui.tsx              Card, StatTile, Badge, Modal, states
 │   ├── hooks/
 │   │   ├── useApi.ts           All TanStack Query hooks + query keys
 │   │   └── useSession.ts       Session restore on mount
 │   ├── lib/
 │   │   ├── api.ts              Typed fetch client over the API envelope
+│   │   ├── i18n.ts             zh/en dictionaries, locale store, formatters
 │   │   ├── sse.ts              POST-based SSE stream reader for /chat
 │   │   └── format.ts           Duration / date / relative-time formatters
 │   ├── stores/
@@ -62,8 +60,9 @@ frontend/
 - **Presentational components take props.** Anything in `components/` that is
   reused across pages must be pure and prop-driven; page-specific composition
   stays in the page file.
-- **New pages**: create `src/app/<route>/page.tsx`, add the route to `NAV` in
-  `components/AppShell.tsx`, and add query hooks to `hooks/useApi.ts`.
+- **New pages**: create `src/app/<route>/page.tsx` and add the query hooks to
+  `hooks/useApi.ts`. There is no sidebar `NAV` to update — the header's account
+  chip is the only navigation, and it leads to Settings.
 
 ---
 
@@ -71,7 +70,7 @@ frontend/
 
 | Kind | Convention | Example |
 |---|---|---|
-| Page | `page.tsx` in a lowercase route dir | `app/goals/page.tsx` |
+| Page | `page.tsx` in a lowercase route dir | `app/journals/page.tsx` |
 | Component | `PascalCase.tsx` | `components/LoginPanel.tsx` |
 | Hook | `use` + PascalCase, `.ts` | `hooks/useApi.ts` |
 | Store | lowercase noun, `.ts` | `stores/auth.ts` |
