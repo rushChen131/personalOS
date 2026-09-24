@@ -84,12 +84,19 @@ class MockGateway:
                 return "没有匹配的记忆。" if zh else "No matching memories."
             joined = "；".join(m.get("content", "") for m in memories[:3]) + ("。" if zh else "")
             return ("相关记忆：" + joined) if zh else ("Relevant memories: " + joined + ".")
-        if "goals" in result:
-            goals = result["goals"]
-            if not goals:
-                return "没有找到目标。" if zh else "No goals found."
-            items = "，".join(f"{g.get('title')}（{float(g.get('progress', 0)):.0f}%）" for g in goals)
-            return ("目标：" + items + "。") if zh else ("Goals: " + items + ".")
+        if "todos" in result:
+            todos = result["todos"]
+            if not todos:
+                return "没有找到待办。" if zh else "No todos found."
+            if zh:
+                items = "，".join(
+                    f"{t.get('title')}{'（已完成）' if t.get('completed') else ''}" for t in todos
+                )
+                return "待办：" + items + "。"
+            items = ", ".join(
+                f"{t.get('title')}{' (done)' if t.get('completed') else ''}" for t in todos
+            )
+            return f"Todos: {items}."
         if "proposal" in result:
             return "该操作需要你确认后才会执行。" if zh else "This action needs your confirmation before I run it."
         return None
@@ -133,8 +140,8 @@ class MockGateway:
             return (not available or name in available) and name not in used
 
         # Specific entity questions must outrank the catch-all "recent activity"
-        # check: "最近有什么目标" mentions recency *and* goals, and the user wants
-        # goals. Ordering these first is what keeps that distinction.
+        # check: "最近有什么待办" mentions recency *and* todos, and the user wants
+        # todos. Ordering these first is what keeps that distinction.
         #
         # Each branch is checked with `intent_allowed` rather than `allowed`: a
         # specific intent that has already been served should END the turn, not
@@ -142,7 +149,17 @@ class MockGateway:
         specific = (
             (("memory" in normalized or "记忆" in message), "search_memory",
              {"query": re.sub(r"[？?。.]", "", message)[-24:]}),
-            (("goal" in normalized or "目标" in message), "query_goals", {}),
+            (
+                (
+                    "todo" in normalized
+                    or "to-do" in normalized
+                    or "待办" in message
+                    or "task" in normalized
+                    or "任务" in message
+                ),
+                "query_todos",
+                {},
+            ),
         )
         for matches, name, args in specific:
             if not matches:
@@ -203,16 +220,16 @@ class MockGateway:
         normalized = message.lower()
         zh = MockGateway.detect_language(message) == "zh"
         if any(word in normalized for word in ("hello", "hi ", "hey")) or message.startswith("你好"):
-            return "你好！我可以帮你回顾日志、目标和记忆。" if zh else (
-                "Hi! I can help you review journals, goals, and memories."
+            return "你好！我可以帮你回顾日志、待办和记忆。" if zh else (
+                "Hi! I can help you review journals, todos, and memories."
             )
         if any(word in normalized for word in ("help", "what can you")) or "能做什么" in message:
             if zh:
-                return "我可以回顾你的日志、查看目标、搜索记忆。"
-            return "I can review your journals, goals, and memories."
+                return "我可以回顾你的日志、查看待办、搜索记忆。"
+            return "I can review your journals, todos, and memories."
         if zh:
-            return "我可以帮你整理日志、目标和记忆。你可以试试问「我最近写了什么」或「今天完成了什么」。"
-        return "I can help organize your journals, goals, and memories."
+            return "我可以帮你整理日志、待办和记忆。你可以试试问「我最近写了什么」或「今天完成了什么」。"
+        return "I can help organize your journals, todos, and memories."
 
     # -- structured output helpers (used by agents) ----------------------
 

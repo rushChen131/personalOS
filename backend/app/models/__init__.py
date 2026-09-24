@@ -13,12 +13,12 @@ from app.models.base import (
     UserStatus,
 )
 from app.models.conversation import AgentRun, Conversation, Message, ToolRun
-from app.models.event import Event, EventGoal, EventTag, Tag
+from app.models.event import Event, EventTag, EventTodo, Tag
 from app.models.insight import Insight
 from app.models.job import Job
 from app.models.journal import Journal
 from app.models.memory import Memory, MemoryCandidate, MemorySource
-from app.models.project import Goal, GoalMetric, GoalProject, Project
+from app.models.project import Project, Todo, TodoMetric, TodoProject
 from app.models.report import Report, ReportDefinition
 from app.models.user import User, UserSetting
 
@@ -28,13 +28,10 @@ __all__ = [
     "CandidateStatus",
     "Conversation",
     "Event",
-    "EventGoal",
+    "EventTodo",
     "EventSource",
     "EventTag",
     "EventType",
-    "Goal",
-    "GoalMetric",
-    "GoalProject",
     "Insight",
     "InsightType",
     "Job",
@@ -51,6 +48,9 @@ __all__ = [
     "ReportType",
     "Tag",
     "TimestampMixin",
+    "Todo",
+    "TodoMetric",
+    "TodoProject",
     "ToolRun",
     "User",
     "UserSetting",

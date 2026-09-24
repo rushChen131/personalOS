@@ -1,6 +1,6 @@
 """Clear all business data for a PersonalOS deployment, keeping user accounts.
 
-The API deliberately exposes DELETE only for journals and goals, so a full wipe
+The API deliberately exposes DELETE only for journals and todos, so a full wipe
 cannot be driven over HTTP. This script goes through the ORM instead, which also
 gives us correct foreign-key ordering and a per-table report of what was removed.
 
@@ -31,11 +31,8 @@ from app.models import (  # noqa: E402
     AgentRun,
     Conversation,
     Event,
-    EventGoal,
     EventTag,
-    Goal,
-    GoalMetric,
-    GoalProject,
+    EventTodo,
     Insight,
     Job,
     Journal,
@@ -47,6 +44,9 @@ from app.models import (  # noqa: E402
     Report,
     ReportDefinition,
     Tag,
+    Todo,
+    TodoMetric,
+    TodoProject,
     ToolRun,
 )
 
@@ -57,11 +57,11 @@ BUSINESS_TABLES = [
     ("memory_candidates", MemoryCandidate),
     ("memories", Memory),
     ("event_tags", EventTag),
-    ("event_goals", EventGoal),
+    ("event_todos", EventTodo),
     ("events", Event),
-    ("goal_metrics", GoalMetric),
-    ("goal_projects", GoalProject),
-    ("goals", Goal),
+    ("todo_metrics", TodoMetric),
+    ("todo_projects", TodoProject),
+    ("todos", Todo),
     ("projects", Project),
     ("tags", Tag),
     ("insights", Insight),

@@ -3,6 +3,8 @@
 import { useEffect } from "react";
 import { create } from "zustand";
 
+import type { Category } from "@/types/api";
+
 /**
  * Lightweight i18n layer.
  *
@@ -21,13 +23,28 @@ export const LOCALES: Array<{ value: Locale; label: string; short: string }> = [
 
 export const DEFAULT_LOCALE: Locale = "zh";
 
+/**
+ * Life domains shared by journals, todos and memories, in picker order.
+ * Mirrors `models/base.py::Category`; labels live under `category.*`.
+ */
+export const CATEGORIES: Category[] = [
+  "WORK",
+  "LEARNING",
+  "INVESTMENT",
+  "FINANCE",
+  "HEALTH",
+  "LIFE",
+  "SOCIAL",
+  "CREATIVE",
+  "TRAVEL",
+  "OTHER",
+];
+
 const STORAGE_KEY = "personalos.locale";
 
 const dictionaries: Record<Locale, Record<string, string>> = {
   zh: {
-    // --- shell / navigation -------------------------------------------------
-    "nav.dashboard": "总览",
-    "nav.settings": "设置",
+    // --- shell --------------------------------------------------------------
     "shell.loading": "正在加载 PersonalOS…",
     "shell.signOut": "退出登录",
     "shell.copilot": "AI 助手",
@@ -63,7 +80,7 @@ const dictionaries: Record<Locale, Record<string, string>> = {
     "common.risks": "风险",
     "common.recommendations": "建议",
     "common.nextActions": "后续行动",
-    "common.goals": "目标",
+    "common.todos": "待办",
     "common.events": "事件",
     "common.start": "开始",
     "common.end": "结束",
@@ -72,15 +89,17 @@ const dictionaries: Record<Locale, Record<string, string>> = {
     "common.prev": "上一页",
     "common.next": "下一页",
     "common.pageOf": "第 {page} / {total} 页",
+    "common.delete": "删除",
 
     // --- dashboard ----------------------------------------------------------
     "dashboard.title": "总览",
-    "dashboard.subtitle": "一览你的日志、目标与记忆。",
+    "dashboard.subtitle": "一览你的日志、待办与记忆。",
     "dashboard.statJournals": "日志（累计）",
     "dashboard.statMemories": "记忆",
-    "dashboard.statActiveGoals": "进行中目标",
+    "dashboard.statOpenTodos": "未完成待办",
     "dashboard.recentJournals": "最近日志",
     "dashboard.recentJournalsHint": "点击任意一条进入日志页",
+    "dashboard.viewReports": "查看报告",
     "dashboard.errorStats": "无法加载统计数据。",
 
     // --- journals -----------------------------------------------------------
@@ -93,28 +112,77 @@ const dictionaries: Record<Locale, Record<string, string>> = {
     "journals.allEntries": "全部日志",
     "journals.entry": "日志",
     "journals.empty": "暂无日志。",
+    "journals.emptyCategory": "该类型下暂无日志。",
     "journals.errorSave": "无法保存该日志。",
 
-    // --- goals (rendered on the dashboard) ----------------------------------
-    "goals.newGoal": "新建目标",
-    "goals.targetDate": "目标日期",
-    "goals.addGoal": "添加目标",
-    "goals.empty": "暂无目标。",
-    "goals.activeGoals": "进行中的目标",
-    "goals.total": "共 {count} 个",
-    "goals.due": "截止 {date}",
-    "goals.placeholder": "发布 PersonalOS v1.2",
-    "goals.errorCreate": "无法创建该目标。",
+    // --- todos (rendered on the dashboard) ----------------------------------
+    "todos.title": "待办清单",
+    "todos.newTodo": "新建待办",
+    "todos.targetDate": "截止日期",
+    "todos.addTodo": "添加待办",
+    "todos.empty": "暂无待办。",
+    "todos.summary": "{open} 项未完成 · {done} 项已完成",
+    "todos.due": "截止 {date}",
+    "todos.completedAt": "完成于 {date}",
+    "todos.placeholder": "写一篇本周复盘",
+    "todos.errorCreate": "无法创建该待办。",
+    "todos.errorUpdate": "无法更新该待办。",
+    "todos.errorDelete": "无法删除该待办。",
+    "todos.markDone": "标记为已完成",
+    "todos.markOpen": "标记为未完成",
+    "todos.completed": "已完成",
+    "todos.open": "未完成",
+    "todos.steps": "{done}/{total} 步骤",
+    "todos.expand": "展开步骤",
+    "todos.collapse": "收起步骤",
+    "todos.addStep": "添加步骤",
+    "todos.newStep": "新建步骤",
+    "todos.stepPlaceholder": "下一步做什么？",
+    "todos.inheritHint": "分类与截止日期继承自父条目",
+    "todos.errorCreateStep": "无法添加该步骤。",
+    "todos.confirmDeleteSteps": "确认删除（含 {count} 个步骤）",
 
     // --- memories (rendered on the dashboard) -------------------------------
     "memories.derivedHint": "记忆由你每天填写的日志自动提炼，无需手动录入。",
     "memories.searchPlaceholder": "深度工作、Rust、健康…",
     "memories.searchResults": "搜索结果（{count}）",
     "memories.allMemories": "全部记忆",
+    "memories.allCategories": "全部类型",
     "memories.importance": "重要度",
     "memories.noMatches": "没有匹配项。",
     "memories.empty": "暂无记忆。",
     "memories.errorSearch": "搜索失败。",
+
+    // --- reports ------------------------------------------------------------
+    "reports.title": "报告",
+    "reports.subtitle": "从日志聚合出的日报、周报与月报。",
+    "reports.daily": "日报",
+    "reports.weekly": "周报",
+    "reports.monthly": "月报",
+    "reports.generate": "生成报告",
+    "reports.generating": "正在生成…",
+    "reports.scopeAll": "全部领域",
+    "reports.empty": "暂无报告，点击「生成报告」创建一份。",
+    "reports.selectPrompt": "从左侧选择一份报告查看详情。",
+    "reports.journalCount": "日志数",
+    "reports.activeDays": "有记录天数",
+    "reports.period": "区间",
+    "reports.breakdown": "类型分布",
+    "reports.moods": "心情分布",
+    "reports.todos": "涉及待办",
+    "reports.memories": "本期沉淀记忆",
+    "reports.highlights": "重点摘录",
+    "reports.none": "本期没有记录。",
+    "reports.errorGenerate": "生成报告失败。",
+    "reports.errorLoad": "加载报告失败。",
+    "reports.delete": "删除",
+    "reports.dayCount": "{count} 天",
+    "reports.summaryEmpty": "{period} 期间没有新的日志记录。",
+    "reports.summaryHead": "{period} 共记录 {count} 篇日志，覆盖 {days} 天。",
+    "reports.summaryCategories": "主要集中在 {top}。",
+    "reports.summaryMood": "心情以 {mood} 为主。",
+    "reports.summaryTodos": "涉及待办：{todos}。",
+    "reports.summaryMemories": "本期沉淀 {count} 条长期记忆。",
 
     // --- settings -----------------------------------------------------------
     "settings.title": "设置",
@@ -143,12 +211,28 @@ const dictionaries: Record<Locale, Record<string, string>> = {
     "copilot.error": "请求失败。",
     "copilot.ctx.journal": "日志",
     "copilot.ctx.dashboard": "总览",
-    "copilot.suggestion.0": "为什么进度变慢了？",
+    "copilot.suggestion.0": "我还有哪些待办？",
     "copilot.suggestion.1": "我接下来该做什么？",
     "copilot.suggestion.2": "最近有哪些风险？",
 
+    // --- not found ----------------------------------------------------------
+    "notFound.body": "这个页面不存在，可能已经被合并进总览了。",
+    "notFound.back": "回到总览",
+
     // --- chart --------------------------------------------------------------
     "chart.empty": "该周期内没有数据。",
+
+    // --- categories (life domains, shared by journals/todos/memories) -------
+    "category.WORK": "工作",
+    "category.LEARNING": "学习",
+    "category.INVESTMENT": "投资",
+    "category.FINANCE": "财务",
+    "category.HEALTH": "健康",
+    "category.LIFE": "生活",
+    "category.SOCIAL": "社交",
+    "category.CREATIVE": "创作",
+    "category.TRAVEL": "旅行",
+    "category.OTHER": "其他",
 
     // --- enum values (API-controlled, mapped for display) -------------------
     "enum.WORK": "工作",
@@ -166,8 +250,6 @@ const dictionaries: Record<Locale, Record<string, string>> = {
   },
 
   en: {
-    "nav.dashboard": "Dashboard",
-    "nav.settings": "Settings",
     "shell.loading": "Loading PersonalOS…",
     "shell.signOut": "Sign out",
     "shell.copilot": "AI Copilot",
@@ -201,7 +283,7 @@ const dictionaries: Record<Locale, Record<string, string>> = {
     "common.risks": "Risks",
     "common.recommendations": "Recommendations",
     "common.nextActions": "Next actions",
-    "common.goals": "Goals",
+    "common.todos": "Todos",
     "common.events": "Events",
     "common.start": "Start",
     "common.end": "End",
@@ -210,14 +292,16 @@ const dictionaries: Record<Locale, Record<string, string>> = {
     "common.prev": "Previous",
     "common.next": "Next",
     "common.pageOf": "Page {page} of {total}",
+    "common.delete": "Delete",
 
     "dashboard.title": "Dashboard",
-    "dashboard.subtitle": "Your journals, goals and memories at a glance.",
+    "dashboard.subtitle": "Your journals, todos and memories at a glance.",
     "dashboard.statJournals": "Journals (all time)",
     "dashboard.statMemories": "Memories",
-    "dashboard.statActiveGoals": "Active goals",
+    "dashboard.statOpenTodos": "Open todos",
     "dashboard.recentJournals": "Recent journals",
     "dashboard.recentJournalsHint": "Click an entry to open the journal page",
+    "dashboard.viewReports": "View reports",
     "dashboard.errorStats": "Could not load statistics.",
 
     "journals.title": "Journals",
@@ -229,26 +313,75 @@ const dictionaries: Record<Locale, Record<string, string>> = {
     "journals.allEntries": "All entries",
     "journals.entry": "Entry",
     "journals.empty": "No entries yet.",
+    "journals.emptyCategory": "No entries in this category.",
     "journals.errorSave": "Could not save the entry.",
 
-    "goals.newGoal": "New goal",
-    "goals.targetDate": "Target date",
-    "goals.addGoal": "Add goal",
-    "goals.empty": "No goals yet.",
-    "goals.activeGoals": "Active goals",
-    "goals.total": "{count} total",
-    "goals.due": "due {date}",
-    "goals.placeholder": "Ship PersonalOS v1.2",
-    "goals.errorCreate": "Could not create the goal.",
+    "todos.title": "Todos",
+    "todos.newTodo": "New todo",
+    "todos.targetDate": "Due date",
+    "todos.addTodo": "Add todo",
+    "todos.empty": "No todos yet.",
+    "todos.summary": "{open} open · {done} done",
+    "todos.due": "due {date}",
+    "todos.completedAt": "done {date}",
+    "todos.placeholder": "Write a weekly retrospective",
+    "todos.errorCreate": "Could not create the todo.",
+    "todos.errorUpdate": "Could not update the todo.",
+    "todos.errorDelete": "Could not delete the todo.",
+    "todos.markDone": "Mark as done",
+    "todos.markOpen": "Mark as open",
+    "todos.completed": "Done",
+    "todos.open": "Open",
+    "todos.steps": "{done}/{total} steps",
+    "todos.expand": "Show steps",
+    "todos.collapse": "Hide steps",
+    "todos.addStep": "Add step",
+    "todos.newStep": "New step",
+    "todos.stepPlaceholder": "What's the next step?",
+    "todos.inheritHint": "Category and due date are inherited from the parent",
+    "todos.errorCreateStep": "Could not add the step.",
+    "todos.confirmDeleteSteps": "Confirm delete ({count} steps)",
 
     "memories.derivedHint": "Memories are distilled automatically from the journals you write.",
     "memories.searchPlaceholder": "deep work, Rust, health…",
     "memories.searchResults": "Search results ({count})",
     "memories.allMemories": "All memories",
+    "memories.allCategories": "All categories",
     "memories.importance": "importance",
     "memories.noMatches": "No matches.",
     "memories.empty": "No memories yet.",
     "memories.errorSearch": "Search failed.",
+
+    // --- reports ------------------------------------------------------------
+    "reports.title": "Reports",
+    "reports.subtitle": "Daily, weekly and monthly summaries aggregated from your journals.",
+    "reports.daily": "Daily",
+    "reports.weekly": "Weekly",
+    "reports.monthly": "Monthly",
+    "reports.generate": "Generate report",
+    "reports.generating": "Generating…",
+    "reports.scopeAll": "All domains",
+    "reports.empty": "No reports yet — generate one to get started.",
+    "reports.selectPrompt": "Pick a report on the left to see its detail.",
+    "reports.journalCount": "Journal entries",
+    "reports.activeDays": "Days with entries",
+    "reports.period": "Period",
+    "reports.breakdown": "Category breakdown",
+    "reports.moods": "Mood breakdown",
+    "reports.todos": "Todos touched",
+    "reports.memories": "Memories distilled",
+    "reports.highlights": "Highlights",
+    "reports.none": "Nothing recorded this period.",
+    "reports.errorGenerate": "Could not generate the report.",
+    "reports.errorLoad": "Could not load reports.",
+    "reports.delete": "Delete",
+    "reports.dayCount": "{count} days",
+    "reports.summaryEmpty": "No journal entries were recorded for {period}.",
+    "reports.summaryHead": "{count} journal entries recorded over {period}, spread across {days} days.",
+    "reports.summaryCategories": "Most active areas: {top}.",
+    "reports.summaryMood": "Mood was mostly {mood}.",
+    "reports.summaryTodos": "Todos touched: {todos}.",
+    "reports.summaryMemories": "{count} long-term memories distilled this period.",
 
     "settings.title": "Settings",
     "settings.subtitle": "Account and workspace preferences.",
@@ -275,11 +408,25 @@ const dictionaries: Record<Locale, Record<string, string>> = {
     "copilot.error": "Request failed.",
     "copilot.ctx.journal": "Journal",
     "copilot.ctx.dashboard": "Dashboard",
-    "copilot.suggestion.0": "Why did progress slow down?",
+    "copilot.suggestion.0": "Which todos are still open?",
     "copilot.suggestion.1": "What should I do next?",
     "copilot.suggestion.2": "What are the recent risks?",
 
+    "notFound.body": "This page does not exist — it may have been folded into the dashboard.",
+    "notFound.back": "Back to dashboard",
+
     "chart.empty": "No data for this period.",
+
+    "category.WORK": "Work",
+    "category.LEARNING": "Learning",
+    "category.INVESTMENT": "Investment",
+    "category.FINANCE": "Finance",
+    "category.HEALTH": "Health",
+    "category.LIFE": "Life",
+    "category.SOCIAL": "Social",
+    "category.CREATIVE": "Creative",
+    "category.TRAVEL": "Travel",
+    "category.OTHER": "Other",
 
     "enum.WORK": "WORK",
     "enum.LEARNING": "LEARNING",
@@ -350,7 +497,7 @@ export function translate(locale: Locale, key: string, params?: TranslateParams)
   );
 }
 
-/** Map an API enum value (event type, goal status, numeric priority…) onto a display label. */
+/** Map an API enum value (memory type, numeric priority…) onto a display label. */
 export function translateEnum(locale: Locale, value: string | number | null | undefined): string {
   if (value === null || value === undefined || value === "") return "—";
   if (typeof value === "number") return String(value);
@@ -359,10 +506,23 @@ export function translateEnum(locale: Locale, value: string | number | null | un
   return label ?? value;
 }
 
+/**
+ * Map a life-domain category onto its display label.
+ *
+ * Deliberately not folded into `translateEnum`: the `enum.*` table is the
+ * shared EventType vocabulary, where names like OTHER and FINANCE already
+ * exist with different meanings.
+ */
+export function translateCategory(locale: Locale, value: string | null | undefined): string {
+  const key = `category.${(value || "OTHER").toUpperCase()}`;
+  return translate(locale, key);
+}
+
 /** Zero-argument strings still need the locale, so components use this hook. */
 export function useT() {
   const locale = useLocaleStore((state) => state.locale);
   const t = (key: string, params?: TranslateParams) => translate(locale, key, params);
   const tEnum = (value: string | number | null | undefined) => translateEnum(locale, value);
-  return { t, tEnum, locale };
+  const tCategory = (value: string | null | undefined) => translateCategory(locale, value);
+  return { t, tEnum, tCategory, locale };
 }

@@ -38,18 +38,52 @@ class ToolRegistry:
         self.definitions: dict[str, ToolDefinition] = {
             "query_journals": ToolDefinition(
                 "query_journals",
-                "Search the user's recent journal entries",
+                "Search the user's recent journal entries, optionally filtered by category",
                 READ,
-                {"type": "object", "properties": {"query": {"type": "string"}, "limit": {"type": "integer"}}},
+                {
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string"},
+                        "limit": {"type": "integer"},
+                        "category": {"type": "string"},
+                    },
+                },
             ),
-            "query_goals": ToolDefinition(
-                "query_goals", "List goals with progress", READ, {"type": "object", "properties": {}}
+            "query_todos": ToolDefinition(
+                "query_todos",
+                "List the user's to-dos, optionally filtered by category or by "
+                "whether they are done",
+                READ,
+                {
+                    "type": "object",
+                    "properties": {
+                        "category": {"type": "string"},
+                        "completed": {"type": "boolean"},
+                    },
+                },
             ),
             "search_memory": ToolDefinition(
                 "search_memory",
-                "Hybrid search across memories",
+                "Hybrid search across memories, optionally filtered by category",
                 READ,
-                {"type": "object", "properties": {"query": {"type": "string"}}},
+                {
+                    "type": "object",
+                    "properties": {"query": {"type": "string"}, "category": {"type": "string"}},
+                },
+            ),
+            "query_reports": ToolDefinition(
+                "query_reports",
+                "List the user's period reports (daily / weekly / monthly) with the "
+                "aggregated stats behind them — use this to summarise a period in words",
+                READ,
+                {
+                    "type": "object",
+                    "properties": {
+                        "type": {"type": "string"},
+                        "dimension": {"type": "string"},
+                        "limit": {"type": "integer"},
+                    },
+                },
             ),
             "calendar_tool": ToolDefinition(
                 "calendar_tool",
@@ -148,33 +182,67 @@ class ToolRegistry:
 
         limit = int(args.get("limit", 10))
         query = (args.get("query") or "").strip()
+        category = (args.get("category") or "").strip().upper()
         stmt = select(Journal).where(Journal.user_id == context.user_id)
         if query:
             stmt = stmt.where(Journal.content.ilike(f"%{query}%"))
+        if category:
+            stmt = stmt.where(Journal.category == category)
         stmt = stmt.order_by(Journal.created_at.desc()).limit(limit)
         rows = list((await session.scalars(stmt)).unique())
         return {
             "journals": [
-                {"id": row.id, "title": row.title, "content": row.content} for row in rows
-            ]
-        }
-
-    async def _run_query_goals(
-        self, session: AsyncSession, context: AgentContext, args: dict[str, Any]
-    ) -> dict[str, Any]:
-        from sqlalchemy import select
-
-        from app.models.project import Goal
-
-        rows = list((await session.scalars(select(Goal).where(Goal.user_id == context.user_id).limit(20))).unique())
-        return {
-            "goals": [
                 {
                     "id": row.id,
                     "title": row.title,
-                    "status": row.status,
-                    "progress": float(row.progress),
+                    "content": row.content,
+                    "category": row.category,
                 }
+                for row in rows
+            ]
+        }
+
+    async def _run_query_todos(
+        self, session: AsyncSession, context: AgentContext, args: dict[str, Any]
+    ) -> dict[str, Any]:
+        from sqlalchemy import select
+        from sqlalchemy.orm import selectinload
+
+        from app.models.project import Todo
+
+        rows = list(
+            (
+                await session.scalars(
+                    select(Todo)
+                    .where(Todo.user_id == context.user_id, Todo.parent_id.is_(None))
+                    .options(selectinload(Todo.children))
+                    .order_by(Todo.completed_at.is_(None).desc(), Todo.created_at.desc())
+                    .limit(20)
+                )
+            ).unique()
+        )
+        category = (args.get("category") or "").strip().upper()
+        if category:
+            rows = [row for row in rows if row.category == category]
+        completed = args.get("completed")
+        if isinstance(completed, bool):
+            rows = [row for row in rows if (row.completed_at is not None) is completed]
+
+        def as_item(row: Todo) -> dict[str, Any]:
+            return {
+                "id": row.id,
+                "title": row.title,
+                "category": row.category,
+                "completed": row.completed_at is not None,
+                "completed_at": row.completed_at.isoformat() if row.completed_at else None,
+            }
+
+        # Only top-level todos are listed, each carrying its steps, so a step is
+        # never reported as if it stood on its own. A step has its own completion
+        # state, so it is described rather than folded into its parent's.
+        return {
+            "todos": [
+                {**as_item(row), "steps": [as_item(child) for child in row.children]}
                 for row in rows
             ]
         }
@@ -182,10 +250,48 @@ class ToolRegistry:
     async def _run_search_memory(
         self, session: AsyncSession, context: AgentContext, args: dict[str, Any]
     ) -> dict[str, Any]:
+        category = (args.get("category") or "").strip().upper()
         hits = await self.rag.search(
-            session, context.user_id, args.get("query", ""), filters={"kind": "memory"}, top_k=10
+            session,
+            context.user_id,
+            args.get("query", ""),
+            filters={"kind": "memory", "category": category or None},
+            top_k=10,
         )
         return {"memories": [h for h in hits if h["kind"] == "memory"]}
+
+    async def _run_query_reports(
+        self, session: AsyncSession, context: AgentContext, args: dict[str, Any]
+    ) -> dict[str, Any]:
+        from app.repositories.report_repository import ReportRepository
+        from app.services.report_engine import SUPPORTED_TYPES, normalise_dimension
+
+        report_type = (args.get("type") or "").strip().upper() or None
+        if report_type and report_type not in SUPPORTED_TYPES:
+            return {"error": f"unsupported type: {report_type}", "supported": list(SUPPORTED_TYPES)}
+        dimension = (args.get("dimension") or "").strip().upper() or None
+        rows = await ReportRepository().list(
+            session,
+            context.user_id,
+            report_type=report_type,
+            dimension=normalise_dimension(dimension) if dimension else None,
+            limit=int(args.get("limit", 5)),
+        )
+        return {
+            "reports": [
+                {
+                    "id": row.id,
+                    "type": row.type,
+                    "dimension": row.dimension,
+                    "period_start": row.period_start.isoformat(),
+                    "period_end": row.period_end.isoformat(),
+                    "title": row.title,
+                    "summary": row.summary,
+                    "content": row.content,
+                }
+                for row in rows
+            ]
+        }
 
     async def _run_calendar_tool(
         self, session: AsyncSession, context: AgentContext, args: dict[str, Any]

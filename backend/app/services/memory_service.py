@@ -25,9 +25,14 @@ class MemoryService:
         return await self.repository.get(session, user_id, memory_id)
 
     async def list(
-        self, session: AsyncSession, user_id: str, limit: int = 50, offset: int = 0
+        self,
+        session: AsyncSession,
+        user_id: str,
+        limit: int = 50,
+        offset: int = 0,
+        category: str | None = None,
     ) -> list[Memory]:
-        return await self.repository.list(session, user_id, limit, offset)
+        return await self.repository.list(session, user_id, limit, offset, category)
 
     async def search(
         self, session: AsyncSession, user_id: str, req: MemorySearchRequest
@@ -37,6 +42,7 @@ class MemoryService:
             user_id,
             query=req.query,
             memory_type=req.memory_type,
+            category=req.category.value if req.category else None,
             importance_min=req.importance_min,
             from_time=req.from_time,
             to_time=req.to_time,

@@ -14,7 +14,7 @@ class AgentContext:
     current_page: str = "chat"
     current_object_type: str | None = None
     current_object_id: str | None = None
-    goal_ids: list[str] = field(default_factory=list)
+    todo_ids: list[str] = field(default_factory=list)
     project_ids: list[str] = field(default_factory=list)
     memory_ids: list[str] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)

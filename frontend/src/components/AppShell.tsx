@@ -9,9 +9,7 @@ import { LoginPanel } from "@/components/LoginPanel";
 import { CopilotPanel } from "@/components/CopilotPanel";
 import { LOCALES, useHydrateLocale, useLocaleStore, useT } from "@/lib/i18n";
 
-const NAV = [{ href: "/dashboard", key: "nav.dashboard" }];
-
-/** Segmented zh/en switch. Lives in the sidebar and on the login screen. */
+/** Segmented zh/en switch. Lives in Settings and on the login screen. */
 export function LanguageToggle({ className = "" }: { className?: string }) {
   const locale = useLocaleStore((state) => state.locale);
   const setLocale = useLocaleStore((state) => state.setLocale);
@@ -46,7 +44,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { t } = useT();
   const status = useAuthStore((state) => state.status);
   const user = useAuthStore((state) => state.user);
-  const logout = useAuthStore((state) => state.logout);
   const pathname = usePathname();
   const [copilotOpen, setCopilotOpen] = useState(true);
 
@@ -67,59 +64,43 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     );
   }
 
+  // The sidebar is gone. The account chip is the only navigation left and it
+  // leads to Settings, where the language switch and sign-out now live.
+  const initial = (user?.name ?? user?.email ?? "?").trim().charAt(0).toUpperCase();
+
   return (
-    <div className="flex min-h-screen">
-      <aside className="flex w-56 shrink-0 flex-col border-r border-surface-border bg-surface px-3 py-5">
-        {/* Settings has no nav entry any more — the account block is the way in. */}
-        <Link
-          href="/settings"
-          title={t("nav.settings")}
-          aria-label={t("nav.settings")}
-          className={`mb-5 block rounded-md px-2 py-2 transition-colors ${
-            pathname.startsWith("/settings") ? "bg-accent-soft" : "hover:bg-surface-muted"
-          }`}
-        >
-          <p className="text-base font-semibold">PersonalOS</p>
-          <p className="mt-0.5 text-xs text-ink-muted">{user?.name}</p>
-        </Link>
-        <nav className="flex flex-1 flex-col gap-0.5">
-          {NAV.map((item) => {
-            const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`rounded-md px-3 py-2 text-sm transition-colors ${
-                  active ? "bg-accent-soft font-medium text-accent" : "text-ink-muted hover:bg-surface-muted"
-                }`}
-              >
-                {t(item.key)}
-              </Link>
-            );
-          })}
-        </nav>
-        <div className="mt-4 space-y-2">
-          <LanguageToggle className="w-full justify-center" />
-          <button
-            type="button"
-            onClick={logout}
-            className="w-full rounded-md px-3 py-2 text-left text-sm text-ink-muted hover:bg-surface-muted"
+    <div className="flex min-h-screen flex-col">
+      <header className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-surface-border bg-surface px-6 py-2.5">
+        <p className="text-sm font-semibold">PersonalOS</p>
+        <div className="flex items-center gap-2">
+          {copilotOpen ? null : (
+            <button
+              type="button"
+              onClick={() => setCopilotOpen(true)}
+              className="rounded-md border border-surface-border px-3 py-1.5 text-xs text-ink-muted hover:bg-surface-muted"
+            >
+              {t("shell.copilot")}
+            </button>
+          )}
+          <Link
+            href="/settings"
+            title={t("settings.title")}
+            aria-label={t("settings.title")}
+            className={`flex items-center gap-2 rounded-full border border-surface-border py-1 pl-1 pr-3 text-xs transition-colors ${
+              pathname.startsWith("/settings") ? "bg-accent-soft text-accent" : "text-ink-muted hover:bg-surface-muted"
+            }`}
           >
-            {t("shell.signOut")}
-          </button>
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent text-[11px] font-semibold text-white">
+              {initial}
+            </span>
+            <span className="max-w-[10rem] truncate">{user?.name}</span>
+          </Link>
         </div>
-      </aside>
-      <main className="flex-1 overflow-x-hidden p-6">{children}</main>
-      {copilotOpen ? null : (
-        <button
-          type="button"
-          onClick={() => setCopilotOpen(true)}
-          className="fixed right-4 top-4 z-10 rounded-md border border-surface-border bg-surface px-3 py-2 text-xs text-ink-muted shadow-sm hover:bg-surface-muted"
-        >
-          {t("shell.copilot")}
-        </button>
-      )}
-      <CopilotPanel open={copilotOpen} onClose={() => setCopilotOpen(false)} />
+      </header>
+      <div className="flex flex-1">
+        <main className="flex-1 overflow-x-hidden p-6">{children}</main>
+        <CopilotPanel open={copilotOpen} onClose={() => setCopilotOpen(false)} />
+      </div>
     </div>
   );
 }

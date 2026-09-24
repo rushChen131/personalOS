@@ -53,16 +53,6 @@ export function Badge({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function ProgressBar({ value }: { value: number }) {
-  // Backend stores goal progress on the 0-100 scale (技术设计.md §12).
-  const percent = Math.max(0, Math.min(100, Math.round(value)));
-  return (
-    <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-muted">
-      <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${percent}%` }} />
-    </div>
-  );
-}
-
 export function Modal({
   open,
   title,

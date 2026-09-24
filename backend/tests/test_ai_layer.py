@@ -110,10 +110,10 @@ class AiLayerTest(unittest.TestCase):
         self.assertEqual(order, sorted(order))
         self.assertIn("query_journals", text)
 
-        goals = self.client.post(
-            "/api/v1/chat", headers=self.headers, json={"message": "how are my goals doing?"}
+        todos = self.client.post(
+            "/api/v1/chat", headers=self.headers, json={"message": "how are my todos doing?"}
         )
-        self.assertIn("goal_agent", goals.text)
+        self.assertIn("todo_agent", todos.text)
 
     def test_permission_denied_reflected_in_sse(self) -> None:
         # journal_agent is read-only; a normal read turn must complete cleanly.
@@ -216,33 +216,80 @@ class ContextPageTest(unittest.TestCase):
         self.assertNotIn("underlying_events", payload)
         self.assertNotIn("recent_events", payload)
 
-    def test_goal_page_context_includes_metrics_and_related_blocks(self) -> None:
+    def test_todo_page_context_includes_related_blocks(self) -> None:
         import asyncio
 
         from app.ai.context import ContextRuntime
         from app.ai.runtime import AgentContext
         from app.core.database import SessionLocal
 
-        goal = self.client.post(
-            "/api/v1/goals", headers=self.headers, json={"title": "Context goal probe"}
+        todo = self.client.post(
+            "/api/v1/todos", headers=self.headers, json={"title": "Context todo probe"}
         ).json()["data"]
-        self.client.post(
-            f"/api/v1/goals/{goal['id']}/metrics",
+        step = self.client.post(
+            "/api/v1/todos",
             headers=self.headers,
-            json={"name": "Deep work hours", "metric_type": "NUMBER", "current_value": 12, "target_value": 40},
-        )
+            json={"title": "Context step probe", "parent_id": todo["id"]},
+        ).json()["data"]
 
         async def build() -> dict:
             async with SessionLocal() as session:
                 return await ContextRuntime().build(
                     session,
-                    AgentContext(user_id=self.user_id, current_page="goal", current_object_id=goal["id"]),
+                    AgentContext(
+                        user_id=self.user_id, current_page="todo", current_object_id=todo["id"]
+                    ),
                 )
 
         payload = asyncio.run(build())
-        self.assertEqual(payload["goal"]["id"], goal["id"])
-        for key in ("metrics", "recent_journals", "memories"):
-            self.assertIn(key, payload, f"goal page must carry '{key}'")
+        self.assertEqual(payload["todo"]["id"], todo["id"])
+        self.assertFalse(payload["todo"]["completed"])
+        self.assertIsNone(payload["todo"]["completed_at"])
+        # A todo carrying steps must hand them to the model, or it would answer
+        # "what are the steps of X" from nothing.
+        self.assertEqual(
+            [item["title"] for item in payload["todo"]["steps"]], ["Context step probe"]
+        )
+        self.assertEqual(payload["todo"]["steps"][0]["id"], step["id"])
+        for key in ("recent_journals", "memories"):
+            self.assertIn(key, payload, f"todo page must carry '{key}'")
+
+    def test_query_todos_reports_steps_under_their_parent(self) -> None:
+        """§AC10: the AI layer sees subtasks, not just top-level rows."""
+        import asyncio
+
+        from app.ai.runtime import AgentContext
+        from app.ai.tools import ToolRegistry
+        from app.core.database import SessionLocal
+
+        parent = self.client.post(
+            "/api/v1/todos",
+            headers=self.headers,
+            json={"title": "AI parent probe", "category": "WORK"},
+        ).json()["data"]
+        self.client.post(
+            "/api/v1/todos",
+            headers=self.headers,
+            json={"title": "AI step probe", "parent_id": parent["id"]},
+        )
+        self.addCleanup(
+            lambda: self.client.delete(f"/api/v1/todos/{parent['id']}", headers=self.headers)
+        )
+
+        async def run() -> dict:
+            async with SessionLocal() as session:
+                return await ToolRegistry().execute(
+                    "query_todos", {}, AgentContext(user_id=self.user_id), session, {"READ"}
+                )
+
+        result = asyncio.run(run())
+        titles = [item["title"] for item in result["todos"]]
+        self.assertIn("AI parent probe", titles)
+        # A step is reported inside its parent, never as a row of its own —
+        # otherwise the model would answer as if it were a separate task.
+        self.assertNotIn("AI step probe", titles)
+        node = next(item for item in result["todos"] if item["id"] == parent["id"])
+        self.assertEqual([step["title"] for step in node["steps"]], ["AI step probe"])
 
     def test_dashboard_page_context_is_user_only(self) -> None:
         """§53: dashboard carries just the user context, not page objects."""
@@ -418,7 +465,7 @@ class MockGatewayLanguageTest(unittest.TestCase):
 
     READ_TOOLS = {
         "query_journals",
-        "query_goals",
+        "query_todos",
         "search_memory",
     }
 
@@ -434,7 +481,7 @@ class MockGatewayLanguageTest(unittest.TestCase):
     def test_specific_entities_outrank_recent_activity(self) -> None:
         """A recency word plus an entity means the user wants that entity."""
         expected = {
-            "最近有什么目标": "query_goals",
+            "最近有什么待办": "query_todos",
             "搜一下记忆里的Rust": "search_memory",
         }
         for message, tool in expected.items():
@@ -445,10 +492,10 @@ class MockGatewayLanguageTest(unittest.TestCase):
     def test_a_served_intent_stops_instead_of_falling_through(self) -> None:
         """Otherwise a second tool runs and its result overwrites the answer.
 
-        Observed live: "最近有什么目标" queried goals, then fell through to
+        Observed live: "最近有什么待办" queried todos, then fell through to
         the journal query on the next round, so the user saw journals instead.
         """
-        for message in ("最近有什么目标", "最近的洞察", "最近的项目呢"):
+        for message in ("最近有什么待办", "最近的洞察", "最近的项目呢"):
             with self.subTest(message=message):
                 first, _ = self.gateway.plan(message, self.READ_TOOLS, set())
                 self.assertTrue(first, f"{message!r} should pick a tool on round 1")
@@ -523,7 +570,7 @@ class MockGatewayLanguageTest(unittest.TestCase):
         from app.ai.runtime.base import AgentInput
 
         cases = {
-            "goal_agent": ({"goals": [{"title": "跑马拉松", "progress": 40}]}, "目标"),
+            "todo_agent": ({"todos": [{"title": "跑马拉松", "completed": False}]}, "待办"),
             "memory_agent": ({"memories": [{"content": "喜欢深度工作"}]}, "相关记忆"),
         }
         for name, (tool_result, marker) in cases.items():

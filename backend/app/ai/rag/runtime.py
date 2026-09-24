@@ -63,6 +63,8 @@ class RAGRuntime:
         stmt = select(Memory).where(Memory.user_id == user_id)
         if filters.get("memory_type"):
             stmt = stmt.where(Memory.type == filters["memory_type"])
+        if filters.get("category"):
+            stmt = stmt.where(Memory.category == filters["category"])
         rows = list((await session.scalars(stmt.limit(200))).unique())
 
         # Vector component: only computed when the caller supplies a query
@@ -90,6 +92,7 @@ class RAGRuntime:
                         "id": row.id,
                         "content": row.content,
                         "type": row.type,
+                        "category": row.category,
                         "importance": float(row.importance or 0),
                         "score": score,
                     }
@@ -102,6 +105,8 @@ class RAGRuntime:
         stmt = select(Journal).where(Journal.user_id == user_id)
         if filters.get("since"):
             stmt = stmt.where(Journal.occurred_at >= filters["since"])
+        if filters.get("category"):
+            stmt = stmt.where(Journal.category == filters["category"])
         rows = list((await session.scalars(stmt.order_by(Journal.occurred_at.desc()).limit(200))).unique())
         scored = []
         for row in rows:
@@ -115,6 +120,7 @@ class RAGRuntime:
                         "title": row.title,
                         "content": row.content,
                         "type": row.mood,
+                        "category": row.category,
                         "occurred_at": row.occurred_at.isoformat() if row.occurred_at else None,
                         "importance": 0.5,
                         "score": score,
@@ -160,6 +166,8 @@ class RAGRuntime:
         stmt = select(Memory).where(Memory.user_id == user_id, Memory.embedding.is_not(None))
         if filters.get("memory_type"):
             stmt = stmt.where(Memory.type == filters["memory_type"])
+        if filters.get("category"):
+            stmt = stmt.where(Memory.category == filters["category"])
         rows = list((await session.scalars(stmt.limit(200))).unique())
         candidates = [{"id": row.id, "content": row.content, "embedding": list(row.embedding or [])} for row in rows]
         ranked = rank_by_cosine(candidates, vector, limit)

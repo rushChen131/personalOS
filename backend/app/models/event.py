@@ -55,19 +55,19 @@ class Event(Base, TimestampMixin):
     user: Mapped[User] = relationship(back_populates="events")
     journal: Mapped[Journal] = relationship(back_populates="events")
     project: Mapped[Project] = relationship(back_populates="events")
-    goals: Mapped[list[Goal]] = relationship(secondary="event_goals", back_populates="events")
+    todos: Mapped[list[Todo]] = relationship(secondary="event_todos", back_populates="events")
     tags: Mapped[list[Tag]] = relationship(secondary="event_tags", back_populates="events")
 
 
-class EventGoal(Base):
-    __tablename__ = "event_goals"
-    __table_args__ = (Index("idx_event_goals_goal", "goal_id"),)
+class EventTodo(Base):
+    __tablename__ = "event_todos"
+    __table_args__ = (Index("idx_event_todos_todo", "todo_id"),)
 
     event_id: Mapped[str] = mapped_column(
         ForeignKey("events.id", ondelete="CASCADE"), primary_key=True
     )
-    goal_id: Mapped[str] = mapped_column(
-        ForeignKey("goals.id", ondelete="CASCADE"), primary_key=True
+    todo_id: Mapped[str] = mapped_column(
+        ForeignKey("todos.id", ondelete="CASCADE"), primary_key=True
     )
     relation: Mapped[str] = mapped_column(
         String(32), default="RELATED", server_default="RELATED"

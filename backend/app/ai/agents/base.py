@@ -43,15 +43,15 @@ class PersonalManagerAgent(BaseAgent):
         "call the read-only tools you need, then answer concisely using only retrieved facts. "
         "Always reply in the same language the user wrote in."
     )
-    tools = ["query_journals", "query_goals", "search_memory"]
+    tools = ["query_journals", "query_todos", "search_memory", "query_reports"]
     permissions = {READ}
 
     def compose(self, input_: AgentInput, tool_results: list[dict[str, Any]]) -> str:
         zh = MockGateway.detect_language(input_.message) == "zh"
         if not tool_results:
             if zh:
-                return "我可以帮你整理日志、目标和记忆。你可以试试问「我最近写了什么」或「今天完成了什么」。"
-            return "I can help organize your journals, goals, and memories."
+                return "我可以帮你整理日志、待办和记忆。你可以试试问「我最近写了什么」或「还有什么没做完」。"
+            return "I can help organize your journals, to-dos, and memories."
         parts: list[str] = []
         for item in tool_results:
             result = item.get("result", {})
@@ -71,12 +71,21 @@ class PersonalManagerAgent(BaseAgent):
                     parts.append("相关记忆：" + ("；".join(snippets) if snippets else "没有找到"))
                 else:
                     parts.append("Relevant memories: " + ("; ".join(snippets) if snippets else "none found"))
-            if "goals" in result:
-                goals = [f"{g['title']} ({float(g.get('progress', 0)):.0f}%)" for g in result["goals"]]
+            if "todos" in result:
+                todos = result["todos"]
+                open_count = sum(1 for t in todos if not t.get("completed"))
                 if zh:
-                    parts.append("目标：" + ("，".join(goals) if goals else "无"))
+                    parts.append(
+                        f"待办：共 {len(todos)} 条，其中 {open_count} 条未完成。"
+                        if todos
+                        else "待办：无"
+                    )
                 else:
-                    parts.append("Goals: " + (", ".join(goals) if goals else "none"))
+                    parts.append(
+                        f"To-dos: {len(todos)} total, {open_count} open."
+                        if todos
+                        else "To-dos: none"
+                    )
         if not parts:
             return "完成。" if zh else "Done."
         return "".join(parts) if zh else " ".join(parts)
@@ -104,24 +113,34 @@ class JournalAgent(BaseAgent):
         return "没有找到相关日志。" if zh else "No related journal entries found."
 
 
-class GoalAgent(BaseAgent):
-    name = "goal_agent"
-    description = "Tracks goal progress and metrics."
+class TodoAgent(BaseAgent):
+    name = "todo_agent"
+    description = "Lists the user's to-dos and what is still open."
     task_type = "chat"
-    system_prompt = "Report goal status and progress; never modify goals without confirmation."
-    tools = ["query_goals", "query_journals"]
+    system_prompt = (
+        "Report the user's to-dos and which are still open; never modify them "
+        "without confirmation."
+    )
+    tools = ["query_todos", "query_journals"]
     permissions = {READ}
 
     def compose(self, input_: AgentInput, tool_results: list[dict[str, Any]]) -> str:
         zh = MockGateway.detect_language(input_.message) == "zh"
         for item in tool_results:
-            goals = item.get("result", {}).get("goals")
-            if goals:
-                items = [f"{g['title']}（{float(g.get('progress', 0)):.0f}%）" for g in goals]
-                return ("目标：" + "，".join(items) + "。") if zh else (
-                    "Goals: " + ", ".join(f"{g['title']} ({float(g.get('progress', 0)):.0f}%)" for g in goals)
-                )
-        return "没有找到目标。" if zh else "No goals found."
+            todos = item.get("result", {}).get("todos")
+            if todos:
+                if zh:
+                    items = [
+                        f"{t['title']}（{'已完成' if t.get('completed') else '未完成'}）"
+                        for t in todos
+                    ]
+                    return "待办：" + "，".join(items) + "。"
+                items = [
+                    f"{t['title']} ({'done' if t.get('completed') else 'open'})"
+                    for t in todos
+                ]
+                return "To-dos: " + ", ".join(items)
+        return "没有找到待办。" if zh else "No to-dos found."
 
 
 class MemoryAgent(BaseAgent):
@@ -147,7 +166,7 @@ class CoachAgent(BaseAgent):
     description = "Read-only coach; offers suggestions, never decides."
     task_type = "coach"
     system_prompt = "Offer at most three concrete, optional suggestions. Never take action."
-    tools = ["query_journals", "query_goals", "search_memory"]
+    tools = ["query_journals", "query_todos", "search_memory", "query_reports"]
     permissions = {READ}
 
     def compose(self, input_: AgentInput, tool_results: list[dict[str, Any]]) -> str:
@@ -161,7 +180,7 @@ class AgentRegistry:
             for agent in (
                 PersonalManagerAgent(),
                 JournalAgent(),
-                GoalAgent(),
+                TodoAgent(),
                 MemoryAgent(),
                 CoachAgent(),
             )
@@ -180,9 +199,9 @@ __all__ = [
     "AgentRegistry",
     "BaseAgent",
     "CoachAgent",
-    "GoalAgent",
     "JournalAgent",
     "MemoryAgent",
     "PersonalManagerAgent",
+    "TodoAgent",
     "agent_registry",
 ]

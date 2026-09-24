@@ -37,7 +37,7 @@ class User(Base, TimestampMixin):
     settings: Mapped[UserSetting] = relationship(
         back_populates="user", uselist=False, cascade="all, delete-orphan"
     )
-    goals: Mapped[list[Goal]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    todos: Mapped[list[Todo]] = relationship(back_populates="user", cascade="all, delete-orphan")
     projects: Mapped[list[Project]] = relationship(back_populates="user", cascade="all, delete-orphan")
     journals: Mapped[list[Journal]] = relationship(back_populates="user", cascade="all, delete-orphan")
     events: Mapped[list[Event]] = relationship(back_populates="user", cascade="all, delete-orphan")

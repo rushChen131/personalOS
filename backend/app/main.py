@@ -11,10 +11,11 @@ from app.api.v1 import (
     auth,
     chat,
     context,
-    goal,
     health,
     journal,
     memory,
+    report,
+    todo,
 )
 from app.api.v1.responses import setup_exception_handlers
 from app.core import security
@@ -98,7 +99,8 @@ app.include_router(health.router, prefix=v1_prefix)
 app.include_router(action.router, prefix=v1_prefix)
 app.include_router(auth.router, prefix=v1_prefix)
 app.include_router(journal.router, prefix=v1_prefix)
-app.include_router(goal.router, prefix=v1_prefix)
+app.include_router(todo.router, prefix=v1_prefix)
 app.include_router(memory.router, prefix=v1_prefix)
+app.include_router(report.router, prefix=v1_prefix)
 app.include_router(chat.router, prefix=v1_prefix)
 app.include_router(context.router, prefix=v1_prefix)

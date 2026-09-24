@@ -1,12 +1,19 @@
 import type {
   ApiEnvelope,
   ApiErrorBody,
+  Category,
   ContextResponse,
   Conversation,
-  Goal,
   Journal,
   Memory,
+  MemorySearchRequest,
   Message,
+  Report,
+  ReportGenerateRequest,
+  ReportType,
+  Todo,
+  TodoCreate,
+  TodoUpdate,
   TokenResponse,
   User,
 } from "@/types/api";
@@ -76,26 +83,44 @@ export const api = {
   me: () => request<User>("/auth/me"),
 
   // journals
-  listJournals: () => request<Journal[]>("/journals"),
-  createJournal: (body: { title: string; content: string; mood?: string }) =>
+  listJournals: (category?: Category) =>
+    request<Journal[]>(`/journals${category ? `?category=${category}` : ""}`),
+  createJournal: (body: { title: string; content: string; category?: Category; mood?: string }) =>
     request<Journal>("/journals", json(body)),
   getJournal: (id: string) => request<Journal>(`/journals/${id}`),
   deleteJournal: (id: string) => request<{ id: string }>(`/journals/${id}`, { method: "DELETE" }),
 
-  // goals
-  listGoals: () => request<Goal[]>("/goals"),
-  createGoal: (body: { title: string; description?: string; target_date?: string }) =>
-    request<Goal>("/goals", json(body)),
-  getGoal: (id: string) => request<Goal>(`/goals/${id}`),
-  updateGoal: (id: string, body: Partial<Goal> & { priority?: number }) =>
-    request<Goal>(`/goals/${id}`, { method: "PUT", body: JSON.stringify(body) }),
-  deleteGoal: (id: string) => request<{ id: string }>(`/goals/${id}`, { method: "DELETE" }),
+  // todos
+  listTodos: (params: { completed?: boolean; category?: Category } = {}) => {
+    const query = new URLSearchParams();
+    if (params.completed !== undefined) query.set("completed", String(params.completed));
+    if (params.category) query.set("category", params.category);
+    const suffix = query.toString();
+    return request<Todo[]>(`/todos${suffix ? `?${suffix}` : ""}`);
+  },
+  createTodo: (body: TodoCreate) => request<Todo>("/todos", json(body)),
+  getTodo: (id: string) => request<Todo>(`/todos/${id}`),
+  /** Also the check/uncheck call: `{ completed: true }` stamps `completed_at`. */
+  updateTodo: (id: string, body: TodoUpdate) =>
+    request<Todo>(`/todos/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+  deleteTodo: (id: string) => request<{ deleted: boolean }>(`/todos/${id}`, { method: "DELETE" }),
 
   // memories
-  listMemories: (type?: string) => request<Memory[]>(`/memories${type ? `?type=${type}` : ""}`),
-  searchMemories: (query: string, limit = 20) =>
-    request<Memory[]>("/memories/search", json({ query, limit })),
+  listMemories: (category?: Category) =>
+    request<Memory[]>(`/memories${category ? `?category=${category}` : ""}`),
+  /** Hybrid search. `query` may be omitted to browse by category alone. */
+  searchMemories: (body: MemorySearchRequest) =>
+    request<Memory[]>("/memories/search", json(body)),
   getMemory: (id: string) => request<Memory>(`/memories/${id}`),
+
+  // reports
+  listReports: (type?: ReportType) =>
+    request<Report[]>(`/reports${type ? `?type=${type}` : ""}`),
+  getReport: (id: string) => request<Report>(`/reports/${id}`),
+  /** Build the report for a period; regenerating the same period refreshes it. */
+  generateReport: (body: ReportGenerateRequest) =>
+    request<Report>("/reports/generate", json(body)),
+  deleteReport: (id: string) => request<{ deleted: boolean }>(`/reports/${id}`, { method: "DELETE" }),
 
   // chat
   listConversations: () => request<Conversation[]>("/chat/conversations"),

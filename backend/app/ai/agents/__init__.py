@@ -4,10 +4,10 @@ from app.ai.agents.base import (
     AgentRegistry,
     BaseAgent,
     CoachAgent,
-    GoalAgent,
     JournalAgent,
     MemoryAgent,
     PersonalManagerAgent,
+    TodoAgent,
     agent_registry,
 )
 
@@ -15,9 +15,9 @@ __all__ = [
     "AgentRegistry",
     "BaseAgent",
     "CoachAgent",
-    "GoalAgent",
     "JournalAgent",
     "MemoryAgent",
     "PersonalManagerAgent",
+    "TodoAgent",
     "agent_registry",
 ]

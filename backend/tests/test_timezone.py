@@ -85,10 +85,10 @@ class TimezoneIntegrityTest(unittest.TestCase):
         self.assertEqual(parsed, datetime(2026, 3, 15, 8, 30, tzinfo=timezone.utc))
 
     def test_created_at_is_timezone_aware(self) -> None:
-        goal = self.client.post(
-            "/api/v1/goals", headers=self.headers, json={"title": "TZ created_at probe"}
+        todo = self.client.post(
+            "/api/v1/todos", headers=self.headers, json={"title": "TZ created_at probe"}
         ).json()["data"]
-        parsed = datetime.fromisoformat(goal["created_at"].replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(todo["created_at"].replace("Z", "+00:00"))
         self.assertIsNotNone(parsed.tzinfo)
         # Must be a recent instant, not a timestamp shifted by hours.
         drift = abs((datetime.now(timezone.utc) - parsed.astimezone(timezone.utc)).total_seconds())

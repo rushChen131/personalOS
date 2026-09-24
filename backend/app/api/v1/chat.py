@@ -44,8 +44,8 @@ def _select_agent(message: str, context_type: str | None) -> str:
     )
     if context_type == "journal" or any(word in lowered for word in journal_signals):
         return "journal_agent"
-    if any(word in lowered for word in ("goal", "目标", "progress", "进度")):
-        return "goal_agent"
+    if any(word in lowered for word in ("todo", "to-do", "待办", "task", "任务", "目标")):
+        return "todo_agent"
     if any(word in lowered for word in ("memory", "记忆", "remember")):
         return "memory_agent"
     return "personal_manager"

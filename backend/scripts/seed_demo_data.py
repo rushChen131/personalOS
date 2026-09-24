@@ -1,12 +1,15 @@
 """Populate a running PersonalOS instance with a realistic demo dataset.
 
 Everything is written through the HTTP API, so the real Journal -> Candidate ->
-Memory pipeline and the goal-progress job run exactly as
-they would for a live user. Nothing is inserted directly into the database.
+Memory pipeline runs exactly as it would for a live user. Nothing is inserted
+directly into the database.
 
-Journals are the single authored input, so this script only writes journals (and
-goals/metrics). Memories and goal progress are derived by the jobs
-that fire on journal creation.
+Journals are the single authored input, so this script only writes journals
+(plus a small checklist of todos). Memories are derived by the jobs that fire on
+journal creation.
+
+Every seeded journal and todo carries a life-domain category (投资、工作、学习…);
+memories inherit the dominant category of the journals they were distilled from.
 
     cd backend && .venv/Scripts/python.exe scripts/seed_demo_data.py
 
@@ -75,15 +78,15 @@ class ApiClient:
 def reset_demo_data(client: ApiClient) -> None:
     """Remove the demo user's existing records so re-seeding is idempotent.
 
-    Only ``/journals`` and ``/goals`` expose a DELETE endpoint today, so other
+    Only ``/journals`` and ``/todos`` expose a DELETE endpoint today, so other
     collections cannot be cleared over HTTP. Rather than silently leaving stale
     rows behind, this reports what it can remove and tells the caller to rebuild
     the database when a fully clean slate is required.
     """
-    removable = ("/journals", "/goals")
+    removable = ("/journals", "/todos")
     skipped: list[str] = []
     removed = 0
-    for path in ("/journals", "/goals", "/memories"):
+    for path in ("/journals", "/todos", "/memories"):
         items = client.data(client.get(path))
         if path not in removable:
             if items:
@@ -101,42 +104,51 @@ def seed(client: ApiClient) -> None:
     today = datetime.now(timezone.utc).date()
     weekday = today.weekday()
 
-    # ------------------------------------------------------------------- goals
-    print("\n[goals]")
-    goals = {}
-    for title, why, target in (
+    # ------------------------------------------------------------------- todos
+    # A checklist item is title + category + completion. Nothing here carries a
+    # percentage: `completed_at` is the single source of truth for done/not-done.
+    print("\n[todos]")
+    todos = {}
+    for title, category, target in (
         (
-            "Ship AgentScope v1.0",
-            "Get the framework stable enough for other teams to adopt",
+            "Ship AgentScope v1.0 release notes",
+            "WORK",
+            (today + timedelta(days=7)).isoformat(),
+        ),
+        (
+            "Finish 'Thinking in Systems'",
+            "LEARNING",
+            (today + timedelta(days=14)).isoformat(),
+        ),
+        (
+            "Book the 10K race entry",
+            "HEALTH",
+            (today + timedelta(days=30)).isoformat(),
+        ),
+        (
+            "Rebalance the index-fund position",
+            "INVESTMENT",
             (today + timedelta(days=45)).isoformat(),
         ),
         (
-            "Read 12 books this year",
-            "Sustained input keeps my thinking sharp",
-            (today + timedelta(days=100)).isoformat(),
-        ),
-        (
-            "Run a sub-50 minute 10K",
-            "Baseline fitness and a concrete measurable target",
-            (today + timedelta(days=75)).isoformat(),
+            "Write the weekly retrospective",
+            "LIFE",
+            None,
         ),
     ):
-        goal = client.data(client.post("/goals", {"title": title, "why": why, "target_date": target}))
-        goals[title] = goal["id"]
-        print(f"  + goal     {title}")
+        todo = client.data(
+            client.post(
+                "/todos",
+                {"title": title, "category": category, "target_date": target},
+            )
+        )
+        todos[title] = todo["id"]
+        print(f"  + todo     [{category:<10}] {title}")
 
-    # Attach a measurable metric to one goal (exercises the goal page context).
-    client.post(
-        f"/goals/{goals['Run a sub-50 minute 10K']}/metrics",
-        {
-            "name": "Weekly distance",
-            "metric_type": "NUMBER",
-            "current_value": 24,
-            "target_value": 35,
-            "unit": "km",
-        },
-    )
-    print("  + metric   Weekly distance (24/35 km)")
+    # Check one item off, so the demo checklist shows both states and the report
+    # narrative has a completed todo to mention.
+    client.put(f"/todos/{todos['Write the weekly retrospective']}", {"completed": True})
+    print("  ~ done     Write the weekly retrospective")
 
     # ---------------------------------------------------------------- journals
     # Journals are the only authored input. Each entry is written as a short
@@ -154,8 +166,12 @@ def seed(client: ApiClient) -> None:
     # carries at least one first-person statement mentioning AgentScope, which
     # also keeps the bucket comfortably above the threshold.
     print("\n[journals]")
+    # Each entry carries a life-domain category (投资/工作/学习…). Memories are
+    # not authored, so the MemoryEngine inherits the dominant category of the
+    # journals behind each promoted memory — the AgentScope bucket below is all
+    # WORK, so its memory should come out as WORK rather than the OTHER default.
     journal_specs = [
-        # (days_ago, title, content, mood)
+        # (days_ago, title, content, mood, category)
         (
             1,
             "AgentScope architecture research",
@@ -163,6 +179,7 @@ def seed(client: ApiClient) -> None:
             "I am using AgentScope for a multi-agent orchestration prototype and the "
             "message bus design is the part I keep coming back to.",
             "focused",
+            "WORK",
         ),
         (
             1,
@@ -171,6 +188,7 @@ def seed(client: ApiClient) -> None:
             "loop to three rounds and the behaviour is much easier to reason about. "
             "I think AgentScope is the right foundation for this.",
             "satisfied",
+            "WORK",
         ),
         (
             2,
@@ -178,6 +196,7 @@ def seed(client: ApiClient) -> None:
             "Went deeper into the AgentScope architecture again. I prefer AgentScope's "
             "explicit tool registry over the more magical frameworks I have tried.",
             "curious",
+            "WORK",
         ),
         (
             3,
@@ -185,6 +204,7 @@ def seed(client: ApiClient) -> None:
             "Wired up the AgentScope deployment pipeline. I am deploying AgentScope "
             "behind a small FastAPI service and the packaging story is still rough.",
             "tired",
+            "WORK",
         ),
         (
             4,
@@ -192,6 +212,7 @@ def seed(client: ApiClient) -> None:
             "Reviewed the AgentScope tooling with the team. I think AgentScope needs a "
             "clearer permission model before other teams adopt it.",
             "thoughtful",
+            "WORK",
         ),
         (
             5,
@@ -199,6 +220,7 @@ def seed(client: ApiClient) -> None:
             "Wrote up my AgentScope architecture notes. I keep AgentScope notes in a "
             "flat markdown file because a wiki slows me down.",
             "focused",
+            "WORK",
         ),
         (
             2,
@@ -206,6 +228,7 @@ def seed(client: ApiClient) -> None:
             "Worked on the PersonalOS memory pipeline. I am extracting memories straight "
             "from the journals I write rather than entering them by hand.",
             "satisfied",
+            "WORK",
         ),
         (
             2,
@@ -213,6 +236,7 @@ def seed(client: ApiClient) -> None:
             "Strength session today. I train three times a week and I run on the "
             "off days, which keeps my energy steady.",
             "energised",
+            "HEALTH",
         ),
         (
             1,
@@ -220,6 +244,7 @@ def seed(client: ApiClient) -> None:
             "Easy morning run before work. I prefer running early because the city is "
             "quiet and I think more clearly afterwards.",
             "good",
+            "HEALTH",
         ),
         (
             4,
@@ -227,6 +252,7 @@ def seed(client: ApiClient) -> None:
             "Long run on the weekend. I usually keep these slow and conversational to "
             "protect my knees.",
             "good",
+            "HEALTH",
         ),
         (
             2,
@@ -234,6 +260,7 @@ def seed(client: ApiClient) -> None:
             "Read another chapter of Thinking in Systems. I read before bed most nights "
             "and it has replaced scrolling almost entirely.",
             "calm",
+            "LEARNING",
         ),
         (
             5,
@@ -241,6 +268,7 @@ def seed(client: ApiClient) -> None:
             "Finished The Design of Everyday Things. I like books that give me a lens I "
             "can apply the next morning at work.",
             "curious",
+            "LEARNING",
         ),
         (
             1,
@@ -248,6 +276,7 @@ def seed(client: ApiClient) -> None:
             "Sprint planning for the AgentScope release. I planned aggressively and I "
             "need to be honest that the scope is probably too big.",
             "focused",
+            "WORK",
         ),
         (
             3,
@@ -255,6 +284,7 @@ def seed(client: ApiClient) -> None:
             "Long code review session. I am reviewing more than I am writing right now "
             "and I do not enjoy that ratio.",
             "tired",
+            "WORK",
         ),
         (
             4,
@@ -262,6 +292,7 @@ def seed(client: ApiClient) -> None:
             "Weekly retrospective. I realised I have been skipping my evening walks and "
             "that my sleep got worse because of it.",
             "thoughtful",
+            "LIFE",
         ),
         (
             5,
@@ -269,6 +300,7 @@ def seed(client: ApiClient) -> None:
             "I decided to drop the graph database spike. I was spending more time "
             "learning the tool than solving the problem.",
             "relieved",
+            "WORK",
         ),
         (
             2,
@@ -276,6 +308,7 @@ def seed(client: ApiClient) -> None:
             "Shipped the vector retrieval path. I always feel better after shipping "
             "something tangible rather than reading about it.",
             "proud",
+            "WORK",
         ),
         (
             4,
@@ -283,6 +316,7 @@ def seed(client: ApiClient) -> None:
             "Dinner with friends. I need these evenings more than I admit and I should "
             "protect them when my calendar gets busy.",
             "happy",
+            "SOCIAL",
         ),
         (
             5,
@@ -290,6 +324,23 @@ def seed(client: ApiClient) -> None:
             "Monthly budget review. I track spending on the first weekend of the month "
             "because otherwise I avoid looking at it entirely.",
             "neutral",
+            "FINANCE",
+        ),
+        (
+            3,
+            "Portfolio rebalance",
+            "Rebalanced the portfolio this evening. I invest on a fixed schedule rather "
+            "than reacting to the news, because I know my own timing is not good.",
+            "calm",
+            "INVESTMENT",
+        ),
+        (
+            6,
+            "Index fund fee research",
+            "Compared index fund fee structures. I prefer broad index funds over picking "
+            "individual stocks because I do not want to watch them every day.",
+            "curious",
+            "INVESTMENT",
         ),
         (
             3,
@@ -297,10 +348,11 @@ def seed(client: ApiClient) -> None:
             "Good week overall. I wrote every day, which is the habit I am most proud of "
             "sustaining this quarter.",
             "good",
+            "LIFE",
         ),
     ]
     created = 0
-    for days_ago, title, content, mood in journal_specs:
+    for days_ago, title, content, mood, category in journal_specs:
         occurred = datetime.now(timezone.utc) - timedelta(days=days_ago, hours=4)
         client.post(
             "/journals",
@@ -308,6 +360,7 @@ def seed(client: ApiClient) -> None:
                 "title": title,
                 "content": content,
                 "mood": mood,
+                "category": category,
                 "occurred_at": occurred.isoformat(),
             },
         )
@@ -340,12 +393,23 @@ def main() -> int:
 
     print("\n[verify]")
     for path, label in (
-        ("/goals", "goals"),
+        ("/todos", "todos"),
         ("/journals", "journals"),
         ("/memories", "memories"),
     ):
         items = client.data(client.get(path))
         print(f"  {label:<10} {len(items)}")
+
+    # Confirms the category field round-trips through the API, and that promoted
+    # memories inherited a real domain rather than the OTHER default.
+    print("\n[by category]")
+    for path, label in (("/journals", "journals"), ("/todos", "todos"), ("/memories", "memories")):
+        counts: dict[str, int] = {}
+        for item in client.data(client.get(path)):
+            key = item.get("category") or "MISSING"
+            counts[key] = counts.get(key, 0) + 1
+        breakdown = ", ".join(f"{name}={count}" for name, count in sorted(counts.items()))
+        print(f"  {label:<10} {breakdown or '(none)'}")
     return 0
 
 
