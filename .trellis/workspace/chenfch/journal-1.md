@@ -50,3 +50,48 @@ InsightEngine 整文件重写为只读日志（移除 Event 依赖），修复�
 - 重启 WorkBuddy 以注册桥接进来的 trellis-* skill；若仍不识别则跑 link_trellis_skills.py --copy
 - 仓库仍全部未提交（仅 1 个 commit、5 个跟踪文件），按惯例由用户自行提交
 - 09-21-backend-core 仍 in_progress，父任务 09-21-personalos-v1.2 停在 4/5
+
+
+## Session 2: Ship the accumulated work and add one level of todo nesting
+
+**Date**: 2026-09-28
+**Task**: Ship the accumulated work and add one level of todo nesting
+**Branch**: `main`
+
+### Summary
+
+Committed the four features that had piled up in the working tree as four review-ordered commits, pushed them to GitHub, and archived the four Trellis tasks. The todo-nesting feature (one level of subtasks) was finished and verified end to end in the same session.
+
+### Main Changes
+
+- feat(categories): a life-domain on journals, memories and todos, with memories inheriting the domain of their source journals
+- feat(reports): deterministic daily/weekly/monthly reports rebuilt on the journal chain, plus three arq crons
+- refactor(todos): Goal -> Todo across the whole stack, and a todo may now own one level of steps
+- fix(web): retired URLs 307-redirect to the dashboard and a real not-found page replaces Next's bare 404
+- docs: Trellis specs and README realigned with the current architecture
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2fa31cb` | (see git log) |
+| `d488ff1` | (see git log) |
+| `2518e2f` | (see git log) |
+| `378202a` | (see git log) |
+
+### Testing
+
+- [OK] ruff clean; unittest 80 OK; scripts/smoke_test.py 83 PASSED / 0 FAILED; alembic check clean at 20260924_0005
+- [OK] tsc --noEmit and next lint clean; i18n zh/en key parity verified (176 x 2)
+- [OK] live probe against the real server: 20/20, including the cascade delete that must hold with SQLite foreign keys OFF
+- [OK] browser-path probe through the Next proxy: 14/14; dev DB invariant ORPHANED=0
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- backend/scripts/_probe_todos.py is still untracked scratch, deliberately excluded from the commits
+- three .next.stale-* dirs are parked in frontend/ and can be deleted
+- CopilotPanel.tsx:182 uses text-danger but tailwind.config.ts defines no danger colour, so the class emits nothing
