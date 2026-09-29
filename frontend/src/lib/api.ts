@@ -112,6 +112,8 @@ export const api = {
   searchMemories: (body: MemorySearchRequest) =>
     request<Memory[]>("/memories/search", json(body)),
   getMemory: (id: string) => request<Memory>(`/memories/${id}`),
+  /** Memories are derived rather than authored, so delete is the only write path. */
+  deleteMemory: (id: string) => request<{ deleted: boolean }>(`/memories/${id}`, { method: "DELETE" }),
 
   // reports
   listReports: (type?: ReportType) =>

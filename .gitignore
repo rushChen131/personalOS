@@ -18,6 +18,10 @@ smoke.db
 uvicorn.out.txt
 uvicorn.err.txt
 
+# --- Logs ---
+logs/
+*.log
+
 # --- Node / Next.js ---
 node_modules/
 .next/

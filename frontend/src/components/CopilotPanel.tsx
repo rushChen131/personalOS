@@ -179,7 +179,7 @@ export function CopilotPanel({ open, onClose }: { open: boolean; onClose: () => 
       {view === "history" ? (
         <div className="flex-1 overflow-y-auto px-4 py-4">
           {historyLoading ? <p className="text-xs text-ink-muted">{t("common.loading")}</p> : null}
-          {historyError ? <p className="text-xs text-danger">{historyError}</p> : null}
+          {historyError ? <p className="text-xs text-red-600">{historyError}</p> : null}
           {!historyLoading && !historyError && conversations.length === 0 ? (
             <p className="text-xs text-ink-muted">{t("copilot.historyEmpty")}</p>
           ) : null}

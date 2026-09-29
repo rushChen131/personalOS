@@ -24,4 +24,8 @@ def configure() -> Path:
     os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{db_file.as_posix()}"
     os.environ.setdefault("SEED_DEMO_USER", "true")
     os.environ.setdefault("LLM_PROVIDER", "mock")
+    # Settings read ``.env`` unconditionally, so a LOG_FILE configured there
+    # would make the suite write log files into the working tree. Env vars
+    # outrank ``.env``, and an empty value disables file logging.
+    os.environ.setdefault("LOG_FILE", "")
     return db_file

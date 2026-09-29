@@ -53,3 +53,22 @@ async def get_memory(
     if memory is None:
         raise NotFoundError(ErrorCode.MEMORY_NOT_FOUND, "Memory not found")
     return ok(request, MemoryResponse.model_validate(memory))
+
+
+@router.delete("/{memory_id}")
+async def delete_memory(
+    memory_id: str,
+    request: Request,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+):
+    """Delete one promoted memory.
+
+    Memories are otherwise read-only — they are distilled from journals rather
+    than authored by hand — but a memory promoted out of junk entries has to be
+    removable, so this is the single write path the module exposes.
+    """
+    deleted = await memory_service.delete(session, user.id, memory_id)
+    if not deleted:
+        raise NotFoundError(ErrorCode.MEMORY_NOT_FOUND, "Memory not found")
+    return ok(request, {"deleted": True})

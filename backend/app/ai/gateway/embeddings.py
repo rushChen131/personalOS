@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import math
-from typing import Protocol
+from typing import Any, Protocol
 
 from app.core.config import settings
 from app.core.logging import logger
@@ -57,23 +57,56 @@ class MockEmbeddingProvider:
 
 
 class OpenAIEmbeddingProvider:
-    """Real embedding provider, used when ``EMBEDDING_PROVIDER=openai``."""
+    """Real embedding provider, used when ``EMBEDDING_PROVIDER=openai``.
+
+    Deliberately reads its *own* credentials instead of reusing the chat ones:
+    the endpoint serving embeddings is frequently not the one serving chat (the
+    company LiteLLM gateway, for instance, exposes no embedding model at all),
+    so both the base URL and the key are configured separately.
+    """
 
     provider = "openai"
     dim = EMBEDDING_DIM
 
-    def __init__(self, api_key: str | None = None, model: str | None = None) -> None:
-        self.api_key = api_key or settings.openai_api_key
+    def __init__(
+        self,
+        api_key: str | None = None,
+        model: str | None = None,
+        base_url: str | None = None,
+    ) -> None:
+        self.api_key = api_key or settings.embedding_api_key or settings.openai_api_key
         if not self.api_key:
-            raise ValueError("OPENAI_API_KEY is required for OpenAIEmbeddingProvider")
+            raise ValueError(
+                "EMBEDDING_API_KEY (or OPENAI_API_KEY) is required for OpenAIEmbeddingProvider"
+            )
+        self.base_url = base_url or settings.embedding_base_url
         self.model = model or settings.embedding_model
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
         from openai import AsyncOpenAI
 
-        client = AsyncOpenAI(api_key=self.api_key)
+        # `base_url=None` makes the SDK fall back to its own default, so an
+        # unset EMBEDDING_BASE_URL keeps the original OpenAI behaviour.
+        client = AsyncOpenAI(api_key=self.api_key, base_url=self.base_url or None)
+        # `encoding_format` is pinned to "float": left unset the SDK injects
+        # "base64" of its own accord, and NIM-style endpoints expect "float".
+        kwargs: dict[str, Any] = {
+            "model": self.model,
+            "input": texts,
+            "encoding_format": "float",
+        }
+        # NIM-served models (e.g. nvidia/nemotron-3-embed-1b) require an
+        # `input_type` and reject over-long inputs unless `truncate` is set.
+        # Both are NIM-specific, so they are opt-in rather than always sent.
+        extra: dict[str, Any] = {}
+        if settings.embedding_input_type:
+            extra["input_type"] = settings.embedding_input_type
+        if settings.embedding_truncate:
+            extra["truncate"] = settings.embedding_truncate
+        if extra:
+            kwargs["extra_body"] = extra
         try:
-            response = await client.embeddings.create(model=self.model, input=texts)
+            response = await client.embeddings.create(**kwargs)
         except Exception as exc:  # pragma: no cover - network dependent
             logger.error("embeddings.failed", error=str(exc))
             raise
@@ -83,13 +116,16 @@ class OpenAIEmbeddingProvider:
 def build_embedding_provider() -> EmbeddingProvider:
     """Select the embedder from configuration, falling back safely.
 
-    Local mode must always have a working embedder, so an unset key degrades to
+    Local mode must always have a working embedder, so a missing key degrades to
     the deterministic mock rather than disabling the vector path entirely.
     """
-    if settings.embedding_provider == "openai" and settings.openai_api_key:
-        return OpenAIEmbeddingProvider()
     if settings.embedding_provider == "openai":
-        logger.warning("embeddings.fallback_to_mock", reason="EMBEDDING_PROVIDER=openai but no API key")
+        if settings.embedding_api_key or settings.openai_api_key:
+            return OpenAIEmbeddingProvider()
+        logger.warning(
+            "embeddings.fallback_to_mock",
+            reason="EMBEDDING_PROVIDER=openai but no EMBEDDING_API_KEY/OPENAI_API_KEY",
+        )
     return MockEmbeddingProvider()
 
 

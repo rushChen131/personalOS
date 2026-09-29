@@ -28,6 +28,9 @@ os.environ.update(
         "SEED_DEMO_USER": "true",
         "SECRET_KEY": "smoke-secret",
         "FRONTEND_ORIGIN": "http://localhost:3000",
+        # Settings read ``.env`` unconditionally, so without this the smoke run
+        # would append its throwaway traffic to the real dev log file.
+        "LOG_FILE": "",
     }
 )
 

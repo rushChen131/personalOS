@@ -29,15 +29,43 @@ class Settings(BaseSettings):
 
     llm_provider: str = "mock"
     openai_api_key: str | None = None
+    # Point the OpenAI-protocol gateway at any compatible endpoint — a company
+    # LiteLLM proxy, vLLM, Azure, ... Left unset the SDK uses its own default.
+    # The value is a *base*: the SDK appends `/chat/completions` itself, so an
+    # endpoint published as `.../v1/chat/completions` is configured as `.../v1`.
+    openai_base_url: str | None = None
+    # The gateway speaks the OpenAI *protocol*, but the endpoint may only serve
+    # model ids that are not OpenAI's. Keeping the ids in settings is what lets
+    # a company deployment swap in e.g. DeepSeek without touching code.
+    openai_chat_model: str = "gpt-4o-mini"
+    openai_heavy_model: str = "gpt-4o"
     anthropic_api_key: str | None = None
     gemini_api_key: str | None = None
 
     embedding_provider: str = "mock"
+    # Embeddings are configured separately from chat: the endpoint that serves
+    # them is often a different service with its own credentials (the company
+    # LiteLLM gateway exposes no embedding model at all).
     embedding_model: str = "text-embedding-3-small"
+    embedding_api_key: str | None = None
+    # Same "base" convention as `openai_base_url` above.
+    embedding_base_url: str | None = None
+    # NIM-served models (e.g. nvidia/nemotron-3-embed-1b) require `input_type`
+    # and reject over-long inputs unless `truncate` is set. Opt-in because they
+    # are not part of the OpenAI embeddings schema.
+    embedding_input_type: str | None = None
+    embedding_truncate: str | None = None
 
     frontend_origin: str = "http://localhost:3000"
 
     seed_demo_user: bool = True
+
+    # Mirror log lines to a rotating file in addition to stdout. Unset (or
+    # empty) disables it — the test bootstrap sets LOG_FILE="" so the suite
+    # never litters the working tree with log files.
+    log_file: str | None = None
+    log_max_bytes: int = 10 * 1024 * 1024
+    log_backup_count: int = 5
 
     @model_validator(mode="after")
     def _enforce_production_safety(self) -> Settings:

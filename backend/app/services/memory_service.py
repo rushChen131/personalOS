@@ -9,12 +9,13 @@ from app.schemas.common import MemorySearchRequest
 
 
 class MemoryService:
-    """Read-only access to promoted memories.
+    """Access to promoted memories: read them, or delete one.
 
     Memories are never authored directly: they are distilled from journal
-    entries by ``MemoryEngine`` (§83). This service therefore exposes only
-    read paths — the manual ``create`` route was removed with the memories
-    page form so that every Memory stays traceable to its source journals.
+    entries by ``MemoryEngine`` (§83). The manual ``create`` route was removed
+    with the memories page form so that every Memory stays traceable to its
+    source journals. ``delete`` is the one write path, because a memory
+    promoted out of junk entries has no other way to be removed.
     """
 
     def __init__(self, repository: MemoryRepository, bus: EventBus):
@@ -23,6 +24,10 @@ class MemoryService:
 
     async def get(self, session: AsyncSession, user_id: str, memory_id: str) -> Memory | None:
         return await self.repository.get(session, user_id, memory_id)
+
+    async def delete(self, session: AsyncSession, user_id: str, memory_id: str) -> bool:
+        """Remove one memory. Returns False when it does not exist for this user."""
+        return await self.repository.delete(session, user_id, memory_id)
 
     async def list(
         self,

@@ -6,6 +6,7 @@ import { Badge, Card, EmptyState, ErrorState, Modal, StatTile } from "@/componen
 import {
   useCreateJournal,
   useCreateTodo,
+  useDeleteMemory,
   useDeleteTodo,
   useJournals,
   useMemories,
@@ -50,6 +51,7 @@ export default function DashboardPage() {
   const createTodo = useCreateTodo();
   const updateTodo = useUpdateTodo();
   const deleteTodo = useDeleteTodo();
+  const deleteMemory = useDeleteMemory();
   const createJournal = useCreateJournal();
   /**
    * A second instance rather than reusing `createTodo`: the step form lives
@@ -211,6 +213,20 @@ export default function DashboardPage() {
     setQuery("");
     setCategoryFilter("");
     setResults(null);
+  }
+
+  /**
+   * Search results live in local state, so invalidating the `["memories"]` query
+   * is not enough while a search is on screen — the deleted row would stay
+   * visible until the next search. Prune it from the results as well.
+   */
+  function removeMemory(id: string) {
+    deleteMemory.mutate(id, {
+      onSuccess: () =>
+        setResults((current) =>
+          current ? current.filter((memory) => memory.id !== id) : current,
+        ),
+    });
   }
 
   return (
@@ -556,6 +572,14 @@ export default function DashboardPage() {
                 <div className="flex shrink-0 items-center gap-1.5">
                   <Badge>{tCategory(memory.category)}</Badge>
                   <Badge>{tEnum(memory.type)}</Badge>
+                  <button
+                    type="button"
+                    onClick={() => removeMemory(memory.id)}
+                    disabled={deleteMemory.isPending}
+                    className="shrink-0 rounded-md px-1.5 py-0.5 text-xs text-ink-muted hover:bg-surface-muted disabled:opacity-60"
+                  >
+                    {t("common.delete")}
+                  </button>
                 </div>
               </li>
             ))}
@@ -565,6 +589,11 @@ export default function DashboardPage() {
             <EmptyState message={results ? t("memories.noMatches") : t("memories.empty")} />
           )
         )}
+        {deleteMemory.isError ? (
+          <div className="mt-3">
+            <ErrorState message={t("memories.errorDelete")} />
+          </div>
+        ) : null}
       </Card>
 
       <Modal open={todoOpen} title={t("todos.newTodo")} onClose={closeTodoModal}>

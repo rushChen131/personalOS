@@ -2,10 +2,10 @@
 
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.memory import Memory, MemorySource
+from app.models.memory import Memory, MemoryCandidate, MemorySource
 
 
 class MemoryRepository:
@@ -91,3 +91,33 @@ class MemoryRepository:
             .offset(offset)
         )
         return list((await session.scalars(stmt)).unique())
+
+    async def delete(self, session: AsyncSession, user_id: str, memory_id: str) -> bool:
+        """Delete a memory together with its evidence and its candidate link.
+
+        Both edges are cut by hand. This project never issues ``PRAGMA
+        foreign_keys=ON`` and SQLite defaults foreign keys **off**, so neither
+        the ``CASCADE`` on ``memory_sources`` nor the ``SET NULL`` on
+        ``memory_candidates.promoted_memory_id`` would ever fire: the source rows
+        would survive as orphans and the candidate would keep pointing at a
+        memory that no longer exists.
+
+        Ownership is checked first so a foreign id deletes nothing at all.
+        """
+        memory = await self.get(session, user_id, memory_id)
+        if memory is None:
+            return False
+
+        await session.execute(delete(MemorySource).where(MemorySource.memory_id == memory_id))
+        await session.execute(
+            update(MemoryCandidate)
+            .where(MemoryCandidate.promoted_memory_id == memory_id)
+            .values(promoted_memory_id=None)
+        )
+        await session.delete(memory)
+        # Emit the DELETE before returning. ``get_db`` commits *after* ``yield``
+        # and FastAPI runs that teardown only once the response is on the wire,
+        # so without this a client reading straight after the delete could still
+        # see the row.
+        await session.flush()
+        return True

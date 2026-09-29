@@ -151,6 +151,80 @@ class AiLayerTest(unittest.TestCase):
         again = asyncio.run(provider.embed(["AgentScope architecture research"]))[0]
         self.assertEqual(related_a, again)
 
+    def test_embedding_provider_reads_its_own_endpoint_and_forwards_nim_params(self) -> None:
+        """Embeddings are configured independently of chat.
+
+        The service that serves embeddings is frequently *not* the one that
+        serves chat (the company LiteLLM gateway exposes no embedding model at
+        all), so the provider must not silently reuse the chat credentials.
+        NIM-served models additionally require ``input_type``, and the SDK would
+        otherwise inject ``encoding_format=base64`` on its own.
+        """
+        import asyncio
+        from types import SimpleNamespace
+        from unittest.mock import patch
+
+        from app.ai.gateway.embeddings import (
+            MockEmbeddingProvider,
+            OpenAIEmbeddingProvider,
+            build_embedding_provider,
+        )
+        from app.core.config import settings
+
+        captured: dict = {}
+
+        class FakeEmbeddings:
+            async def create(self, **kwargs):
+                captured.update(kwargs)
+                return SimpleNamespace(data=[SimpleNamespace(embedding=[0.1, 0.2])])
+
+        class FakeClient:
+            def __init__(self, **kwargs) -> None:
+                captured["client"] = kwargs
+                self.embeddings = FakeEmbeddings()
+
+        touched = (
+            "embedding_provider",
+            "embedding_api_key",
+            "embedding_base_url",
+            "embedding_model",
+            "embedding_input_type",
+            "embedding_truncate",
+            "openai_api_key",
+        )
+        originals = {key: getattr(settings, key) for key in touched}
+        try:
+            settings.embedding_provider = "openai"
+            settings.embedding_api_key = "embed-key"
+            settings.embedding_base_url = "http://embed.invalid/v1"
+            settings.embedding_model = "nvidia/nemotron-3-embed-1b"
+            settings.embedding_input_type = "query"
+            settings.embedding_truncate = "END"
+
+            with patch("openai.AsyncOpenAI", FakeClient):
+                provider = build_embedding_provider()
+                self.assertIsInstance(provider, OpenAIEmbeddingProvider)
+                vectors = asyncio.run(provider.embed(["hello"]))
+
+            self.assertEqual(vectors, [[0.1, 0.2]])
+            # Its own credentials and base URL, never the chat ones.
+            self.assertEqual(captured["client"]["api_key"], "embed-key")
+            self.assertEqual(captured["client"]["base_url"], "http://embed.invalid/v1")
+            self.assertEqual(captured["model"], "nvidia/nemotron-3-embed-1b")
+            self.assertEqual(captured["encoding_format"], "float")
+            # NIM-only fields travel via extra_body; the SDK flattens them onto
+            # the wire, so they are asserted here rather than on the raw body.
+            self.assertEqual(captured["extra_body"], {"input_type": "query", "truncate": "END"})
+
+            # Configured for "openai" but with no key, it must still degrade to a
+            # working embedder rather than breaking the vector path entirely.
+            settings.embedding_api_key = None
+            settings.openai_api_key = None
+            self.assertIsInstance(build_embedding_provider(), MockEmbeddingProvider)
+        finally:
+            for key, value in originals.items():
+                setattr(settings, key, value)
+
 
 class ContextPageTest(unittest.TestCase):
     """design2.md §53: the Copilot context must change with the current page."""

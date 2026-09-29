@@ -152,6 +152,7 @@ const dictionaries: Record<Locale, Record<string, string>> = {
     "memories.noMatches": "没有匹配项。",
     "memories.empty": "暂无记忆。",
     "memories.errorSearch": "搜索失败。",
+    "memories.errorDelete": "删除失败。",
 
     // --- reports ------------------------------------------------------------
     "reports.title": "报告",
@@ -351,6 +352,7 @@ const dictionaries: Record<Locale, Record<string, string>> = {
     "memories.noMatches": "No matches.",
     "memories.empty": "No memories yet.",
     "memories.errorSearch": "Search failed.",
+    "memories.errorDelete": "Delete failed.",
 
     // --- reports ------------------------------------------------------------
     "reports.title": "Reports",

@@ -117,3 +117,17 @@ export function useDeleteTodo() {
     onSuccess: () => invalidate(),
   });
 }
+
+/** Deleting a memory only affects the memory lists, not the journal-derived data. */
+function useInvalidateMemories() {
+  const client = useQueryClient();
+  return () => void client.invalidateQueries({ queryKey: ["memories"] });
+}
+
+export function useDeleteMemory() {
+  const invalidate = useInvalidateMemories();
+  return useMutation({
+    mutationFn: (id: string) => api.deleteMemory(id),
+    onSuccess: () => invalidate(),
+  });
+}

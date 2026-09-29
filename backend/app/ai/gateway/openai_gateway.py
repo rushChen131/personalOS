@@ -8,22 +8,31 @@ from app.core.config import settings
 from app.core.errors import AppError, ErrorCode
 from app.core.logging import logger
 
-MAX_TOOL_ROUNDS = 3
-
 
 class OpenAIGateway:
     """Real provider path; selected only when ``LLM_PROVIDER=openai`` and a key exists.
 
-    Handles the tool-calling loop (<=3 rounds) so the runtime sees the same
-    single-call contract as the mock gateway.
+    Speaks the OpenAI *protocol*, not necessarily OpenAI *the service*: with
+    ``OPENAI_BASE_URL`` set it talks to any compatible endpoint, and the model
+    ids come from ``OPENAI_CHAT_MODEL`` / ``OPENAI_HEAVY_MODEL``.
+
+    One call per invocation — the tool-calling loop (<=3 rounds) belongs to
+    ``app.ai.runtime.runtime``, so this stays a plain request/response gateway
+    and the runtime sees one contract from every provider.
     """
 
     provider = "openai"
 
-    def __init__(self, api_key: str | None = None, model: str | None = None) -> None:
+    def __init__(
+        self,
+        api_key: str | None = None,
+        model: str | None = None,
+        base_url: str | None = None,
+    ) -> None:
         self.api_key = api_key or settings.openai_api_key
         if not self.api_key:
             raise ValueError("OPENAI_API_KEY is required for OpenAIGateway")
+        self.base_url = base_url or settings.openai_base_url
         self.model = model or ModelRouter().select("chat")
 
     async def generate(
@@ -35,7 +44,9 @@ class OpenAIGateway:
     ) -> GatewayResult:
         from openai import AsyncOpenAI
 
-        client = AsyncOpenAI(api_key=self.api_key)
+        # `base_url=None` makes the SDK fall back to its own default, so an
+        # unset OPENAI_BASE_URL keeps the original behaviour exactly.
+        client = AsyncOpenAI(api_key=self.api_key, base_url=self.base_url or None)
         chosen = model or self.model
         try:
             response = await client.chat.completions.create(
@@ -83,9 +94,18 @@ def build_gateway() -> Any:
     """Select the gateway from settings, falling back to mock when unusable."""
     if settings.llm_provider == "openai" and settings.openai_api_key:
         try:
-            return OpenAIGateway()
+            gateway = OpenAIGateway()
         except ValueError:
             logger.warning("gateway.openai.unavailable", fallback="mock")
+        else:
+            # Logged because "which endpoint am I actually hitting" is the first
+            # question whenever a reply looks wrong.
+            logger.info(
+                "gateway.openai.selected",
+                model=gateway.model,
+                base_url=gateway.base_url or "sdk-default",
+            )
+            return gateway
     return _mock()
 
 
